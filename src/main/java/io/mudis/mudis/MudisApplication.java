@@ -7,9 +7,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.Banner;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.core.env.Environment;
 import org.springframework.shell.core.ShellRunner;
 import org.springframework.shell.core.command.annotation.EnableCommand;
+
+import java.util.Objects;
 
 @ComponentScan(basePackages = {
         "io.mudis.mudis.shell",
@@ -21,42 +25,48 @@ import org.springframework.shell.core.command.annotation.EnableCommand;
 })
 public class MudisApplication {
 
-    private static final Logger LOGGER;
-
-    static {
-        LOGGER = LoggerFactory.getLogger(MudisApplication.class);
-    }
+    private static final Logger LOGGER = LoggerFactory.getLogger(MudisApplication.class);
 
     static void main(String... args) throws Exception {
-        var context = new SpringApplicationBuilder()
+        var context = createApplicationContext(args);
+        var server = context.getBean(Server.class);
+
+        registerShutdownHook(server);
+        startMudisServer(context.getEnvironment(), server);
+        runShell(context, args);
+    }
+
+    private static ConfigurableApplicationContext createApplicationContext(String[] args) {
+        return new SpringApplicationBuilder()
                 .sources(MudisApplication.class)
                 .bannerMode(Banner.Mode.OFF)
                 .run(args);
-
-        var shellRunner = context.getBean(ShellRunner.class);
-        var server = context.getBean(Server.class);
-        var env = context.getEnvironment();
-
-        Runtime.getRuntime()
-                .addShutdownHook(new Thread(server::stop));
-
-        startServer(
-                env.getProperty("mudis.server.host"),
-                env.getProperty("mudis.server.port"),
-                server);
-
-        shellRunner.run(args);
     }
 
-    private static void startServer(String host,
-                                    String port,
-                                    Server server) {
+    private static void registerShutdownHook(Server server) {
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(server::stop));
+    }
+
+    private static void startMudisServer(Environment env, Server server) {
+        var host = Objects.requireNonNull(env.getProperty("mudis.server.host"));
+        var port = Objects.requireNonNull(env.getProperty("mudis.server.port"));
+
         Thread.ofPlatform()
                 .name("mudis-server")
-                .uncaughtExceptionHandler((_, throwable) -> {
-                    LOGGER.error(throwable.getMessage());
-                    System.exit(-1);
-                })
+                .uncaughtExceptionHandler(createServerExceptionHandler())
                 .start(() -> server.start(host, Integer.parseInt(port)));
+    }
+
+    private static Thread.UncaughtExceptionHandler createServerExceptionHandler() {
+        return (_, throwable) -> {
+            LOGGER.error("Server failed to start", throwable);
+            System.exit(-1);
+        };
+    }
+
+    private static void runShell(ConfigurableApplicationContext context, String[] args) throws Exception {
+        var shellRunner = context.getBean(ShellRunner.class);
+        shellRunner.run(args);
     }
 }
