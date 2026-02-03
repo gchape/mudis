@@ -1,3 +1,7 @@
 spring:
   application:
     name: mudis
+
+server:
+  port: 9432
+  host: localhost
