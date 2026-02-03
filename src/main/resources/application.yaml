@@ -1,8 +1,34 @@
 spring:
   application:
     name: mudis
+    version: 0.0.1
+  profiles:
+    active: dev
+  shell:
+    interactive:
+      enabled: on
+    command:
+      script:
+        enabled: off
 
 mudis:
   server:
     port: 8888
     host: localhost
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+logging:
+  level:
+    root: info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+logging:
+  level:
+    root: error

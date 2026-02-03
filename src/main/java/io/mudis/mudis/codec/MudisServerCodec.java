@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class MudisServerCodec extends ByteToMessageCodec<Message> {
-    private static final int HEADER_SIZE = 8;
+    static final int HEADER_SIZE = 8;
 
     @Override
     protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) {
@@ -31,8 +31,7 @@ public class MudisServerCodec extends ByteToMessageCodec<Message> {
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-        // [opOrdinal][size][...args]
-        if (!isValidHeader(in)) {
+        if (!hasNeededMin(in)) {
             return;
         }
 
@@ -48,7 +47,7 @@ public class MudisServerCodec extends ByteToMessageCodec<Message> {
         out.add(message);
     }
 
-    private boolean isValidHeader(ByteBuf in) {
+    private boolean hasNeededMin(ByteBuf in) {
         return in.readableBytes() >= HEADER_SIZE;
     }
 

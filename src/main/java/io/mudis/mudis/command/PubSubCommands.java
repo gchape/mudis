@@ -1,4 +1,4 @@
-package io.mudis.mudis.shell;
+package io.mudis.mudis.command;
 
 import org.springframework.stereotype.Component;
 

@@ -9,30 +9,36 @@ import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
-public enum MudisServer implements Server {
-    INSTANCE;
-
+@Component
+public class MudisServer implements Server {
     static final Logger LOGGER;
-    static final MultiThreadIoEventLoopGroup bossGroup;
-    static final MultiThreadIoEventLoopGroup workerGroup;
+    static final MultiThreadIoEventLoopGroup BOSS_GROUP;
+    static final MultiThreadIoEventLoopGroup WORKER_GROUP;
 
     static {
         LOGGER = LoggerFactory.getLogger(MudisServer.class);
 
-        bossGroup = new MultiThreadIoEventLoopGroup(4, NioIoHandler.newFactory());
-        workerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+        BOSS_GROUP = new MultiThreadIoEventLoopGroup(4, NioIoHandler.newFactory());
+        WORKER_GROUP = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
     }
 
+    @Value("${mudis.server.port}")
+    private int port;
+    @Value("${mudis.server.host}")
+    private String host;
     private ServerSocketChannel server;
 
     @Override
-    public void start(String host, int port) {
+    public void start() {
         var bootstrap = new ServerBootstrap();
         try {
-            server = (ServerSocketChannel) bootstrap.group(bossGroup, workerGroup)
+            server = (ServerSocketChannel) bootstrap.group(BOSS_GROUP, WORKER_GROUP)
                     .channel(NioServerSocketChannel.class)
                     /* */
                     .option(ChannelOption.SO_BACKLOG, 1024)
@@ -44,7 +50,9 @@ public enum MudisServer implements Server {
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) {
-                            socketChannel.pipeline().addLast(new MudisServerCodec());
+                            socketChannel.pipeline()
+                                    .addLast(new MudisServerCodec())
+                                    .addLast(new MudisServerHandler());
                         }
                     })
                     .bind(host, port)
@@ -68,12 +76,13 @@ public enum MudisServer implements Server {
 
     @Override
     public boolean isRunning() {
-        return server.isActive();
+        return server != null && server.isActive();
     }
 
     @Override
+    @PreDestroy
     public void stop() {
-        bossGroup.shutdownGracefully();
-        workerGroup.shutdownGracefully();
+        BOSS_GROUP.shutdownGracefully();
+        WORKER_GROUP.shutdownGracefully();
     }
 }

@@ -1,9 +1,9 @@
 package io.mudis.mudis.server;
 
 public interface Server {
-    void start(String host, int port);
+    void stop();
+
+    void start();
 
     boolean isRunning();
-
-    void stop();
 }
