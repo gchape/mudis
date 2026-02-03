@@ -2,19 +2,18 @@ package io.mudis.mudis.model;
 
 public enum Op {
     // PUB [channel] [message] [optional: data_structure]
-    // data_structure: [] for list append, #{} for set
-    PUBLISH(1024 * 1024),  // 1MB - needs space for message + data structure
-
+    // data_structure: [] | #{}
+    PUBLISH(1024 * 1024),
     // SUB [channel]
-    SUBSCRIBE(256);  // 256 bytes - just channel name
+    SUBSCRIBE(256);
 
-    private final long maxArgsSize;
+    private final long MAX_ARG_SIZE;
 
-    Op(long maxArgsSize) {
-        this.maxArgsSize = maxArgsSize;
+    Op(long MAX_ARG_SIZE) {
+        this.MAX_ARG_SIZE = MAX_ARG_SIZE;
     }
 
-    public long maxArgSize() {
-        return maxArgsSize;
+    public long MAX_ARG_SIZE() {
+        return MAX_ARG_SIZE;
     }
 }

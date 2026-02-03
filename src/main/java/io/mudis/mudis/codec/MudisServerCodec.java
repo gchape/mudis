@@ -9,16 +9,29 @@ import io.netty.handler.codec.ByteToMessageCodec;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-public class MudisCodec extends ByteToMessageCodec<Object> {
+public class MudisServerCodec extends ByteToMessageCodec<Message> {
     private static final int HEADER_SIZE = 8;
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) {
+    protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) {
+        if (msg instanceof Message.Subscribe(String channel)) {
+            String response = "SUBSCRIBED:" + channel;
+            writeString(out, response);
+        } else if (msg instanceof Message.Publish pub) {
+            String response = "PUBLISHED:" + pub.channel();
+            writeString(out, response);
+        }
+    }
 
+    private void writeString(ByteBuf out, String str) {
+        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+        out.writeInt(bytes.length);
+        out.writeBytes(bytes);
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
+        // [opOrdinal][size][...args]
         if (!isValidHeader(in)) {
             return;
         }
@@ -50,7 +63,7 @@ public class MudisCodec extends ByteToMessageCodec<Object> {
 
     private String[] readAndValidateArgs(ByteBuf in, Op op) {
         int size = in.readInt();
-        if (size < 0 || size > op.maxArgSize()) {
+        if (size < 0 || size > op.MAX_ARG_SIZE()) {
             in.resetReaderIndex();
             throw new IllegalStateException("Invalid args size: " + size);
         }
