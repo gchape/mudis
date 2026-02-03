@@ -1,5 +1,6 @@
 package io.mudis.mudis.server;
 
+import io.mudis.mudis.codec.MudisCodec;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -43,6 +44,7 @@ public enum MudisServer implements Server {
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) {
+                            socketChannel.pipeline().addLast(new MudisCodec());
                         }
                     })
                     .bind(host, port)
