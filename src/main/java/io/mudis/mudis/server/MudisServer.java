@@ -7,10 +7,11 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public enum MudisServer {
+public enum MudisServer implements Server {
     INSTANCE;
 
     static final Logger LOGGER;
@@ -20,16 +21,18 @@ public enum MudisServer {
     static {
         LOGGER = LoggerFactory.getLogger(MudisServer.class);
 
-        bossGroup = new MultiThreadIoEventLoopGroup(3, NioIoHandler.newFactory());
-        workerGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        bossGroup = new MultiThreadIoEventLoopGroup(4, NioIoHandler.newFactory());
+        workerGroup = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
     }
 
     private ServerSocketChannel server;
 
+    @Override
     public void start(String host, int port) {
         var bootstrap = new ServerBootstrap();
         try {
             server = (ServerSocketChannel) bootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
                     /* */
                     .option(ChannelOption.SO_BACKLOG, 1024)
                     .option(ChannelOption.SO_REUSEADDR, true)
@@ -61,7 +64,13 @@ public enum MudisServer {
         }
     }
 
-    public void shutdown() {
+    @Override
+    public boolean isRunning() {
+        return server.isActive();
+    }
+
+    @Override
+    public void stop() {
         bossGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
     }
