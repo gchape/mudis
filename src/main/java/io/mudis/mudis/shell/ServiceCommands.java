@@ -5,9 +5,11 @@ import io.mudis.mudis.pubsub.PublishRegistrar;
 import io.mudis.mudis.server.MudisServer;
 import io.mudis.mudis.server.Server;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.stereotype.Component;
 
+import java.net.Socket;
 import java.util.concurrent.CompletableFuture;
 
 @Component
@@ -16,19 +18,30 @@ public class ServiceCommands {
     private final Server server;
     private CompletableFuture<Void> serverFuture;
 
+    @Value("${mudis.server.host}")
+    private String host;
+    @Value("${mudis.server.port}")
+    private int port;
+
     @Autowired
     public ServiceCommands(MudisServer mudisServer, Client client) {
         this.client = client;
         this.server = mudisServer;
     }
 
-    @Command(name = "start",
-            description = "Start the Mudis service.",
-            group = "Service")
+    public boolean isServerRunning() {
+        try (Socket socket = new Socket(this.host, this.port)) {
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @Command(name = "start", description = "Start the Mudis service.", group = "Service")
     public String startService() {
         StringBuilder status = new StringBuilder();
 
-        if (!server.isRunning()) {
+        if (!isServerRunning()) {
             serverFuture = CompletableFuture.runAsync(server::start);
             status.append("✓ Server started\n");
 
@@ -52,14 +65,10 @@ public class ServiceCommands {
             status.append("- Client already connected\n");
         }
 
-        return (!status.isEmpty()
-                ? status + "Mudis service ready!"
-                : "Mudis service is already running.") + System.lineSeparator();
+        return (!status.isEmpty() ? status + "Mudis service ready!" : "Mudis service is already running.") + System.lineSeparator();
     }
 
-    @Command(name = "stop",
-            description = "Stop the Mudis service.",
-            group = "Service")
+    @Command(name = "stop", description = "Stop the Mudis service.", group = "Service")
     public String stopService() {
         var status = new StringBuilder();
         if (client.isConnected()) {
@@ -79,24 +88,15 @@ public class ServiceCommands {
         PublishRegistrar.INSTANCE.shutdown();
         status.append("✓ Pub/Sub system cleaned up\n");
 
-        return !status.isEmpty()
-                ? status + "Mudis service stopped!"
-                : "Mudis service is not running.";
+        return !status.isEmpty() ? status + "Mudis service stopped!" : "Mudis service is not running.";
     }
 
-    @Command(name = "status",
-            description = "Show the current status of the Mudis service.",
-            group = "Service")
+    @Command(name = "status", description = "Show the current status of the Mudis service.", group = "Service")
     public String getStatus() {
-        return "=== Mudis Status ===\n" +
-                "Server: " + (server.isRunning() ? "RUNNING" : "STOPPED") + "\n" +
-                "Client: " + (client.isConnected() ? "CONNECTED" : "DISCONNECTED") + "\n" +
-                "Channels: " + PublishRegistrar.INSTANCE.getChannels().size() + "\n";
+        return "=== Mudis Status ===\n" + "Server: " + (server.isRunning() ? "RUNNING" : "STOPPED") + "\n" + "Client: " + (client.isConnected() ? "CONNECTED" : "DISCONNECTED") + "\n" + "Channels: " + PublishRegistrar.INSTANCE.getChannels().size() + "\n";
     }
 
-    @Command(name = "channels",
-            description = "List all active pub/sub channels.",
-            group = "Service")
+    @Command(name = "channels", description = "List all active pub/sub channels.", group = "Service")
     public String listChannels() {
         var channels = PublishRegistrar.INSTANCE.getChannels();
         if (channels.isEmpty()) {
@@ -109,9 +109,7 @@ public class ServiceCommands {
         return sb.toString();
     }
 
-    @Command(name = "cleanup",
-            description = "Remove inactive channels with no subscribers.",
-            group = "Service")
+    @Command(name = "cleanup", description = "Remove inactive channels with no subscribers.", group = "Service")
     public String cleanupChannels() {
         int removed = PublishRegistrar.INSTANCE.cleanupInactiveChannels();
         return "Cleaned up " + removed + " inactive channel(s).";
