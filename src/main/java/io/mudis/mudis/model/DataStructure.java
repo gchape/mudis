@@ -1,11 +1,11 @@
 package io.mudis.mudis.model;
 
-public enum Ds {
+public enum DataStructure {
     NONE,
     LIST,
     HASH;
 
-    public static Ds from(String arg) {
+    public static DataStructure from(String arg) {
         return switch (arg) {
             case "[]" -> LIST;
             case "#{}" -> HASH;

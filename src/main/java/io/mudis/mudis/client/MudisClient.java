@@ -9,27 +9,32 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.TimeUnit;
+
 @Component
 public class MudisClient implements Client {
-    static final Logger LOGGER = LoggerFactory.getLogger(MudisClient.class);
-    static final int CONNECTION_TIMEOUT_MS = 5000;
+    private static final Logger LOGGER = LoggerFactory.getLogger(MudisClient.class);
+    private static final int CONNECTION_TIMEOUT_MS = 5000;
+    private static final int MAX_RETRY_ATTEMPTS = 3;
+    private static final int RETRY_DELAY_MS = 1000;
 
-    private final MultiThreadIoEventLoopGroup WORKER_GROUP;
+    private final MultiThreadIoEventLoopGroup workerGroup;
 
-    @Value("${mudis.server.port}")
+    @Value("${mudis.server.port:6379}")
     private int port;
-    @Value("${mudis.server.host}")
+
+    @Value("${mudis.server.host:localhost}")
     private String host;
-    private Channel channel;
+
+    private volatile Channel channel;
 
     public MudisClient() {
-        WORKER_GROUP = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+        this.workerGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
     }
 
     @Override
@@ -39,47 +44,68 @@ public class MudisClient implements Client {
             return;
         }
 
-        var bootstrap = new Bootstrap();
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+                LOGGER.info("Connecting to {}:{} (attempt {}/{})", host, port, attempt, MAX_RETRY_ATTEMPTS);
 
-        try {
-            channel = bootstrap.group(WORKER_GROUP)
-                    .channel(NioSocketChannel.class)
-                    .option(ChannelOption.TCP_NODELAY, true)
-                    .option(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECTION_TIMEOUT_MS)
-                    .handler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel ch) {
-                            ch.pipeline()
-                                    .addLast(new MudisClientCodec())
-                                    .addLast(new MudisClientHandler());
-                        }
-                    })
-                    .connect(host, port)
-                    .sync()
-                    .channel();
+                Bootstrap bootstrap = new Bootstrap();
+                channel = bootstrap.group(workerGroup)
+                        .channel(NioSocketChannel.class)
+                        .option(ChannelOption.TCP_NODELAY, true)
+                        .option(ChannelOption.SO_KEEPALIVE, true)
+                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECTION_TIMEOUT_MS)
+                        .handler(new ChannelInitializer<SocketChannel>() {
+                            @Override
+                            protected void initChannel(SocketChannel ch) {
+                                ch.pipeline()
+                                        .addLast(new MudisClientCodec())
+                                        .addLast(new MudisClientHandler());
+                            }
+                        })
+                        .connect(host, port)
+                        .sync()
+                        .channel();
 
-            LOGGER.info("Connected to Mudis server at {}:{}", host, port);
-        } catch (InterruptedException e) {
-            LOGGER.error("Connection interrupted for {}:{}", host, port, e);
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Failed to connect to server", e);
-        } catch (Exception e) {
-            LOGGER.error("Failed to connect to {}:{}", host, port, e);
-            throw new RuntimeException("Connection failed", e);
+                LOGGER.info("Connected to Mudis server at {}:{}", host, port);
+                return;
+
+            } catch (InterruptedException e) {
+                LOGGER.error("Connection interrupted", e);
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Failed to connect to server", e);
+            } catch (Exception e) {
+                lastException = e;
+                LOGGER.warn("Connection attempt {} failed: {}", attempt, e.getMessage());
+
+                if (attempt < MAX_RETRY_ATTEMPTS) {
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Connection retry interrupted", ie);
+                    }
+                }
+            }
         }
+
+        throw new RuntimeException("Failed to connect after " + MAX_RETRY_ATTEMPTS + " attempts", lastException);
     }
 
     @Override
     public void send(String msg) {
+        if (msg == null || msg.trim().isEmpty()) {
+            throw new IllegalArgumentException("Message cannot be null or empty");
+        }
+
         if (!isConnected()) {
             throw new IllegalStateException("Not connected to server");
         }
 
         channel.writeAndFlush(msg)
-                .addListener(fut -> {
-                    if (!fut.isSuccess()) {
-                        LOGGER.error("Failed to send msg: {}", msg, fut.cause());
+                .addListener(future -> {
+                    if (!future.isSuccess()) {
+                        LOGGER.error("Failed to send message: {}", msg, future.cause());
                     }
                 });
     }
@@ -90,7 +116,6 @@ public class MudisClient implements Client {
     }
 
     @Override
-    @PreDestroy
     public void disconnect() {
         if (channel != null) {
             try {
@@ -100,7 +125,13 @@ public class MudisClient implements Client {
                 LOGGER.error("Error during disconnect", e);
                 Thread.currentThread().interrupt();
             } finally {
-                WORKER_GROUP.shutdownGracefully();
+                try {
+                    workerGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+                    LOGGER.info("Worker group shut down");
+                } catch (InterruptedException e) {
+                    LOGGER.error("Error shutting down worker group", e);
+                    Thread.currentThread().interrupt();
+                }
             }
         }
     }

@@ -1,4 +1,4 @@
-package io.mudis.mudis.command;
+package io.mudis.mudis.shell;
 
 import io.mudis.mudis.client.Client;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +19,7 @@ public class PubSubCommands {
     @Command(name = "PUBLISH",
             description = "Publish a message to a specific key in the Mudis Pub/Sub system.",
             group = "Pub/Sub")
-    private String publish(
+    public String publish(
             @Option(required = true,
                     description = "The key to publish the message under.") String key,
             @Option(required = true,
@@ -29,13 +29,13 @@ public class PubSubCommands {
         }
 
         client.send("PUBLISH " + key + " " + message);
-        return "Ok";
+        return "Message sent";
     }
 
     @Command(name = "SUBSCRIBE",
             description = "Subscribe to a key in the Mudis Pub/Sub system. Optionally specify the data structure.",
             group = "Pub/Sub")
-    private String subscribe(
+    public String subscribe(
             @Option(required = true,
                     description = "The key to subscribe to.") String key,
             @Option(longName = "data-structure",
@@ -46,19 +46,32 @@ public class PubSubCommands {
 
         String ds = "";
         if (dataStructure != null && !dataStructure.isEmpty()) {
-            switch (dataStructure) {
-                case "[]":
-                    ds = "[]";
-                    break;
-                case "#{}":
-                    ds = "#{}";
-                    break;
-                default:
-                    return "Invalid data-structure option. [ [] | #{} ]";
+            ds = switch (dataStructure) {
+                case "[]" -> "[]";
+                case "#{}" -> "#{}";
+                default -> null;
+            };
+
+            if (ds == null) {
+                return "Invalid data-structure option. Valid options: [] or #{}";
             }
         }
 
         client.send("SUBSCRIBE " + key + (ds.isEmpty() ? "" : " " + ds));
-        return "Ok";
+        return "Subscription request sent";
+    }
+
+    @Command(name = "UNSUBSCRIBE",
+            description = "Unsubscribe from a channel in the Mudis Pub/Sub system.",
+            group = "Pub/Sub")
+    public String unsubscribe(
+            @Option(required = true,
+                    description = "The channel to unsubscribe from.") String channel) {
+        if (!client.isConnected()) {
+            return "Client is not connected. Please connect first.";
+        }
+
+        client.send("UNSUBSCRIBE " + channel);
+        return "Unsubscribe request sent";
     }
 }

@@ -2,10 +2,11 @@ package io.mudis.mudis.model;
 
 public sealed interface Message {
 
-    static Message of(Op op, String[] args) {
+    static Message of(Command op, String[] args) {
         return switch (op) {
             case SUBSCRIBE -> newSubscribeMessage(args);
             case PUBLISH -> newPublishMessage(args);
+            case UNSUBSCRIBE -> newUnsubscribeMessage(args);
         };
     }
 
@@ -15,9 +16,9 @@ public sealed interface Message {
         }
 
         if (args.length == 1) {
-            return new Message.Subscribe(args[0], Ds.NONE);
+            return new Message.Subscribe(args[0], DataStructure.NONE);
         } else {
-            return new Message.Subscribe(args[0], Ds.from(args[1]));
+            return new Message.Subscribe(args[0], DataStructure.from(args[1]));
         }
     }
 
@@ -29,15 +30,28 @@ public sealed interface Message {
         return new Message.Publish(args[0], args[1]);
     }
 
+    private static Message newUnsubscribeMessage(String[] args) {
+        if (args.length != 1) {
+            throw new IllegalStateException("UNSUBSCRIBE requires 1 arg, got " + args.length);
+        }
+
+        return new Message.Unsubscribe(args[0]);
+    }
+
     record Subscribe(
             String channel,
-            Ds ds
+            DataStructure ds
     ) implements Message {
     }
 
     record Publish(
             String channel,
             String message
+    ) implements Message {
+    }
+
+    record Unsubscribe(
+            String channel
     ) implements Message {
     }
 }

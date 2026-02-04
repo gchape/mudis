@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         scanBasePackages = {
                 "io.mudis.mudis.client",
                 "io.mudis.mudis.server",
-                "io.mudis.mudis.command",
+                "io.mudis.mudis.shell",
         })
 public class MudisCLI {
 
