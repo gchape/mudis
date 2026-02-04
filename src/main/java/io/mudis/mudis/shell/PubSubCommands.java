@@ -1,6 +1,8 @@
 package io.mudis.mudis.shell;
 
 import io.mudis.mudis.client.Client;
+import io.mudis.mudis.client.MudisClientHandler;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.shell.core.command.annotation.Option;
@@ -16,6 +18,19 @@ public class PubSubCommands {
         this.client = client;
     }
 
+    private @NonNull String waitForChannelResponseAndReturn(int n, String response) {
+        var channelOut = new StringBuilder(System.lineSeparator());
+        try {
+            for (int i = 0; i < n; i++) {
+                channelOut.append(MudisClientHandler.systemOutQueue.take())
+                        .append(System.lineSeparator());
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return response + channelOut;
+    }
+
     @Command(name = "PUBLISH",
             description = "Publish a message to a specific key in the Mudis Pub/Sub system.",
             group = "Pub/Sub")
@@ -29,7 +44,7 @@ public class PubSubCommands {
         }
 
         client.send("PUBLISH " + key + " " + message);
-        return "Message sent";
+        return waitForChannelResponseAndReturn(2, "Message sent");
     }
 
     @Command(name = "SUBSCRIBE",
@@ -58,7 +73,7 @@ public class PubSubCommands {
         }
 
         client.send("SUBSCRIBE " + key + (ds.isEmpty() ? "" : " " + ds));
-        return "Subscription request sent";
+        return waitForChannelResponseAndReturn(1, "Subscription request sent");
     }
 
     @Command(name = "UNSUBSCRIBE",
@@ -72,6 +87,6 @@ public class PubSubCommands {
         }
 
         client.send("UNSUBSCRIBE " + channel);
-        return "Unsubscribe request sent";
+        return waitForChannelResponseAndReturn(1, "Unsubscribe request sent");
     }
 }

@@ -2,7 +2,7 @@ package io.mudis.mudis.model;
 
 public sealed interface Message {
 
-    static Message of(Command op, String[] args) {
+    static Message of(Operation op, String[] args) {
         return switch (op) {
             case SUBSCRIBE -> newSubscribeMessage(args);
             case PUBLISH -> newPublishMessage(args);

@@ -1,6 +1,6 @@
 package io.mudis.mudis.model;
 
-public enum Command {
+public enum Operation {
     // PUBLISH [channel] [message]
     PUBLISH(1024 * 1024),
     // SUBSCRIBE [channel] [optional: data_structure]
@@ -11,7 +11,7 @@ public enum Command {
 
     private final long MAX_ARG_SIZE;
 
-    Command(long MAX_ARG_SIZE) {
+    Operation(long MAX_ARG_SIZE) {
         this.MAX_ARG_SIZE = MAX_ARG_SIZE;
     }
 

@@ -1,7 +1,7 @@
 package io.mudis.mudis.codec;
 
 import io.mudis.mudis.model.Message;
-import io.mudis.mudis.model.Command;
+import io.mudis.mudis.model.Operation;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;
@@ -33,7 +33,7 @@ public class MudisServerCodec extends ByteToMessageCodec<String> {
         in.markReaderIndex();
 
         try {
-            Command op = readOperation(in);
+            Operation op = readOperation(in);
             String[] args = readArguments(in, op);
 
             if (args == null) {
@@ -51,18 +51,18 @@ public class MudisServerCodec extends ByteToMessageCodec<String> {
         }
     }
 
-    private Command readOperation(ByteBuf in) {
+    private Operation readOperation(ByteBuf in) {
         int opOrdinal = in.readInt();
-        if (opOrdinal < 0 || opOrdinal >= Command.values().length) {
+        if (opOrdinal < 0 || opOrdinal >= Operation.values().length) {
             throw new IllegalStateException(
                     String.format("Invalid operation ordinal: %d (valid: 0-%d)",
-                            opOrdinal, Command.values().length - 1)
+                            opOrdinal, Operation.values().length - 1)
             );
         }
-        return Command.values()[opOrdinal];
+        return Operation.values()[opOrdinal];
     }
 
-    private String[] readArguments(ByteBuf in, Command op) {
+    private String[] readArguments(ByteBuf in, Operation op) {
         int size = in.readInt();
 
         if (size < 0) {

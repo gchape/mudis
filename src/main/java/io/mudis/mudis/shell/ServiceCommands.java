@@ -52,17 +52,16 @@ public class ServiceCommands {
             status.append("- Client already connected\n");
         }
 
-        return !status.isEmpty()
+        return (!status.isEmpty()
                 ? status + "Mudis service ready!"
-                : "Mudis service is already running.";
+                : "Mudis service is already running.") + System.lineSeparator();
     }
 
     @Command(name = "stop",
             description = "Stop the Mudis service.",
             group = "Service")
     public String stopService() {
-        StringBuilder status = new StringBuilder();
-
+        var status = new StringBuilder();
         if (client.isConnected()) {
             client.disconnect();
             status.append("✓ Client disconnected\n");
@@ -100,12 +99,11 @@ public class ServiceCommands {
             group = "Service")
     public String listChannels() {
         var channels = PublishRegistrar.INSTANCE.getChannels();
-
         if (channels.isEmpty()) {
             return "No active channels.";
         }
 
-        StringBuilder sb = new StringBuilder();
+        var sb = new StringBuilder();
         sb.append("=== Active Channels (").append(channels.size()).append(") ===\n");
         channels.forEach(channel -> sb.append("• ").append(channel).append("\n"));
         return sb.toString();

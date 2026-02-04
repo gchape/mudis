@@ -1,6 +1,6 @@
 package io.mudis.mudis.codec;
 
-import io.mudis.mudis.model.Command;
+import io.mudis.mudis.model.Operation;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;
@@ -23,9 +23,9 @@ public class MudisClientCodec extends ByteToMessageCodec<String> {
 
         String opName = parts[0].toUpperCase();
 
-        Command op;
+        Operation op;
         try {
-            op = Command.valueOf(opName);
+            op = Operation.valueOf(opName);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
                     "Unknown operation: " + opName + ". Valid operations: " + getValidOps()
@@ -75,7 +75,7 @@ public class MudisClientCodec extends ByteToMessageCodec<String> {
     }
 
     private String getValidOps() {
-        Command[] ops = Command.values();
+        Operation[] ops = Operation.values();
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < ops.length; i++) {
             sb.append(ops[i].name());

@@ -2,19 +2,12 @@ spring:
   application:
     name: mudis
     version: 0.0.1
-
   profiles:
     active: dev
-
   shell:
-    interactive:
-      enabled: true
     command:
       script:
         enabled: false
-    context:
-      close: false
-
   main:
     banner-mode: console
   banner:
