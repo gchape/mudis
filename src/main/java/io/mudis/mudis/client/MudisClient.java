@@ -13,11 +13,9 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 @Component
-@Scope("prototype")
 public class MudisClient implements Client {
     static final Logger LOGGER = LoggerFactory.getLogger(MudisClient.class);
     static final int CONNECTION_TIMEOUT_MS = 5000;

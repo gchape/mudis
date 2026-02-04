@@ -20,4 +20,11 @@ public enum PublishRegistrar {
     public Publisher get(String key) {
         return publishers.get(key);
     }
+
+    public void remove(String key) {
+        Publisher pub = publishers.remove(key);
+        if (pub != null) {
+            pub.close();
+        }
+    }
 }

@@ -2,19 +2,29 @@ spring:
   application:
     name: mudis
     version: 0.0.1
+
   profiles:
     active: dev
+
   shell:
     interactive:
-      enabled: on
+      enabled: true
     command:
       script:
-        enabled: off
+        enabled: false
+    context:
+      close: false
+
+  main:
+    banner-mode: console
+  banner:
+    location: banner.txt
 
 mudis:
   server:
     port: 8888
     host: localhost
+
 ---
 spring:
   config:
@@ -22,7 +32,7 @@ spring:
       on-profile: dev
 logging:
   level:
-    root: info
+    root: error
 
 ---
 spring:

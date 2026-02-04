@@ -6,7 +6,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.function.Consumer;
@@ -24,10 +25,10 @@ public class Publisher extends SubmissionPublisher<String> {
                 this.subscription = subscription;
                 switch (ds) {
                     case LIST:
-                        collection = new ArrayList<>();
+                        collection = Collections.synchronizedList(new ArrayList<>());
                         break;
                     case HASH:
-                        collection = new LinkedHashSet<>();
+                        collection = ConcurrentHashMap.newKeySet();
                         break;
                     default:
                         collection = null;
