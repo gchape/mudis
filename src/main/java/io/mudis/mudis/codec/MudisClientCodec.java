@@ -47,10 +47,8 @@ public class MudisClientCodec extends ByteToMessageCodec<String> {
             return;
         }
 
-        byte[] responseBytes = new byte[size];
-        in.readBytes(responseBytes);
-        String response = new String(responseBytes, StandardCharsets.UTF_8);
-
-        out.add(response);
+        var response = new byte[size];
+        in.readBytes(response);
+        out.add(new String(response, StandardCharsets.UTF_8));
     }
 }

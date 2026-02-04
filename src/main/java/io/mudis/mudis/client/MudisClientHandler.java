@@ -10,8 +10,7 @@ public class MudisClientHandler extends SimpleChannelInboundHandler<String> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, String response) {
-        // TODO: Add response logic
-        LOGGER.info("Received from server: {}", response);
+        System.out.println(response);
     }
 
     @Override

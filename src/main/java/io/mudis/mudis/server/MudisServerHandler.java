@@ -1,6 +1,8 @@
 package io.mudis.mudis.server;
 
 import io.mudis.mudis.model.Message;
+import io.mudis.mudis.pubsub.PublishRegistrar;
+import io.mudis.mudis.pubsub.Publisher;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.slf4j.Logger;
@@ -22,15 +24,28 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
 
     private void handleSubscribe(ChannelHandlerContext ctx, Message.Subscribe sub) {
         LOGGER.info("Client subscribing to channel: {}", sub.channel());
-        // TODO: Add subscription logic (store channel, etc.)
-        ctx.writeAndFlush(sub);
+
+        PublishRegistrar
+                .INSTANCE
+                .put(sub.channel(), Publisher::new);
+
+        PublishRegistrar
+                .INSTANCE
+                .get(sub.channel())
+                .subscribe(sub.ds(), ctx::writeAndFlush);
     }
 
     private void handlePublish(ChannelHandlerContext ctx, Message.Publish pub) {
         LOGGER.info("Client publishing to channel: {} with message: {}",
                 pub.channel(), pub.message());
-        // TODO: Add publish logic (broadcast to subscribers, store in DS, etc.)
-        ctx.writeAndFlush(pub);
+
+        Publisher publisher = PublishRegistrar.INSTANCE.get(pub.channel());
+        if (publisher == null) {
+            LOGGER.warn("No publisher for channel: {}", pub.channel());
+            ctx.writeAndFlush("ERROR:Channel not found");
+            return;
+        }
+        publisher.submit(pub.message());
     }
 
     @Override

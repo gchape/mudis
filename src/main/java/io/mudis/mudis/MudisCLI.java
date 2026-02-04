@@ -1,5 +1,6 @@
 package io.mudis.mudis;
 
+import io.mudis.mudis.client.Client;
 import org.springframework.boot.Banner;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,11 +16,16 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 public class MudisCLI {
 
     static void main(String... args) {
-        new SpringApplicationBuilder()
+        var context = new SpringApplicationBuilder()
                 .sources(MudisCLI.class)
                 .web(WebApplicationType.NONE)
                 .bannerMode(Banner.Mode.CONSOLE)
                 .headless(false)
                 .run(args);
+
+        var c = context.getBean(Client.class);
+        c.connect();
+        c.send("SUBSCRIBE ch");
+        c.send("PUBLISH ch hello");
     }
 }

@@ -10,27 +10,34 @@ public sealed interface Message {
     }
 
     private static Message newSubscribeMessage(String[] args) {
-        if (args.length != 1) {
-            throw new IllegalStateException("SUBSCRIBE requires 1 arg, got " + args.length);
+        if (args.length < 1 || args.length > 2) {
+            throw new IllegalStateException("SUBSCRIBE requires 1-2 args, got " + args.length);
         }
-        return new Message.Subscribe(args[0]);
+
+        if (args.length == 1) {
+            return new Message.Subscribe(args[0], Ds.NONE);
+        } else {
+            return new Message.Subscribe(args[0], Ds.from(args[1]));
+        }
     }
 
     private static Message newPublishMessage(String[] args) {
-        if (args.length < 2 || args.length > 3) {
-            throw new IllegalStateException("PUBLISH requires 2-3 args, got " + args.length);
+        if (args.length != 2) {
+            throw new IllegalStateException("PUBLISH requires 2 args, got " + args.length);
         }
-        Ds ds = args.length == 3 ? Ds.from(args[2]) : Ds.NONE;
-        return new Message.Publish(args[0], args[1], ds);
+
+        return new Message.Publish(args[0], args[1]);
     }
 
-    record Subscribe(String channel) implements Message {
+    record Subscribe(
+            String channel,
+            Ds ds
+    ) implements Message {
     }
 
     record Publish(
             String channel,
-            String message,
-            Ds storage
+            String message
     ) implements Message {
     }
 }

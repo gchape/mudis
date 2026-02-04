@@ -9,22 +9,12 @@ import io.netty.handler.codec.ByteToMessageCodec;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-public class MudisServerCodec extends ByteToMessageCodec<Message> {
+public class MudisServerCodec extends ByteToMessageCodec<String> {
     static final int HEADER_SIZE = 8;
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, Message msg, ByteBuf out) {
-        if (msg instanceof Message.Subscribe(String channel)) {
-            String response = "SUBSCRIBED:" + channel;
-            writeString(out, response);
-        } else if (msg instanceof Message.Publish pub) {
-            String response = "PUBLISHED:" + pub.channel();
-            writeString(out, response);
-        }
-    }
-
-    private void writeString(ByteBuf out, String str) {
-        byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+    protected void encode(ChannelHandlerContext ctx, String msg, ByteBuf out) {
+        byte[] bytes = msg.getBytes(StandardCharsets.UTF_8);
         out.writeInt(bytes.length);
         out.writeBytes(bytes);
     }
