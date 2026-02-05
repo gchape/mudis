@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{ISO8601} [%t] %-5level: %msg%n%throwable</pattern>
+        </encoder>
+    </appender>
+
+    <root level="debug">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="io.netty" level="debug">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <logger name="io.netty.handler" level="debug">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+</configuration>

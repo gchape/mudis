@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: mudis-client
+    version: 0.0.1
+
+  profiles:
+    active: dev
+
+  shell:
+    command:
+      script:
+        enabled: false
+    history:
+      enabled: false
+
+  main:
+    banner-mode: console
+  banner:
+    location: banner.txt
+
+mudis:
+  client:
+    port: 6379
+    host: 0.0.0.0
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    root: error
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    root: error
