@@ -1,6 +1,6 @@
 # Mudis
 
-Performant key-value store with pub/sub capabilities built on Netty and Spring.
+High-performance pub/sub messaging system built on Netty and Spring Boot with reactive streams support.
 
 ## Architecture Overview
 
@@ -14,26 +14,26 @@ graph TB
     end
     
     subgraph "Network Layer"
-        CC[MudisClientCodec]
-        SC[MudisServerCodec]
+        CC[ClientCodec]
+        SC[ServerCodec]
     end
     
     subgraph "Handler Layer"
-        CH[MudisClientHandler]
-        SH[MudisServerHandler]
+        CH[ClientHandler]
+        SH[ServerHandler]
     end
     
     subgraph "Core Layer"
-        SERVER[MudisServer]
+        SERVER[ServerImpl]
         MSG[Message Types]
         OPS[Operations]
         REG[PublishRegistrar]
     end
     
     subgraph "Pub/Sub Layer"
-        PUB[Publisher Flow.Publisher]
-        SUB[Subscriber Flow.Subscriber]
-        COLL[Collections: List/Hash]
+        PUB[Publisher]
+        SUB[DataStructureSubscriber]
+        COLL[Collections: List/Hash/None]
     end
     
     CLI --> CC
@@ -60,33 +60,36 @@ sequenceDiagram
     participant Network
     participant ServerCodec
     participant ServerHandler
+    participant PublishRegistrar
     participant Publisher
 
-    Client->>ClientCodec: sendMessage("SUBSCRIBE ch []")
+    Client->>ClientCodec: send("SUBSCRIBE news []")
     ClientCodec->>ClientCodec: encode()
-    Note over ClientCodec: [1][15][SUBSCRIBE ch []]
+    Note over ClientCodec: [1][11][news []]
     ClientCodec->>Network: Send bytes
     Network->>ServerCodec: Receive bytes
     ServerCodec->>ServerCodec: decode()
-    Note over ServerCodec: Message.Subscribe("ch", DS.LIST)
+    Note over ServerCodec: Message.Subscribe("news", LIST)
     ServerCodec->>ServerHandler: channelRead0(msg)
-    ServerHandler->>Publisher: subscribe(DS.LIST, consumer)
-    Note over ServerHandler: Client now subscribed with LIST
+    ServerHandler->>PublishRegistrar: getOrCreate("news")
+    PublishRegistrar->>Publisher: new Publisher()
+    ServerHandler->>Publisher: subscribe(LIST, ctx)
+    Note over Publisher: Add ctx to subscribers set
+    Publisher->>Client: "OK: Subscribed to channel: news"
     
-    Client->>ClientCodec: sendMessage("PUBLISH ch hello")
+    Client->>ClientCodec: send("PUBLISH news hello")
     ClientCodec->>ClientCodec: encode()
-    Note over ClientCodec: [0][13][PUBLISH ch hello]
+    Note over ClientCodec: [0][11][news hello]
     ClientCodec->>Network: Send bytes
     Network->>ServerCodec: Receive bytes
     ServerCodec->>ServerCodec: decode()
-    Note over ServerCodec: Message.Publish("ch", "hello")
+    Note over ServerCodec: Message.Publish("news", "hello")
     ServerCodec->>ServerHandler: channelRead0(msg)
+    ServerHandler->>PublishRegistrar: get("news")
+    PublishRegistrar->>ServerHandler: publisher
     ServerHandler->>Publisher: submit("hello")
-    Publisher->>ServerHandler: onNext(item)
-    ServerHandler->>ServerCodec: writeAndFlush("[hello]")
-    ServerCodec->>Network: Send accumulated list
-    Network->>ClientCodec: Receive response
-    ClientCodec->>Client: Display "[hello]"
+    Note over Publisher: Broadcast to all subscribers
+    Publisher->>Client: "[hello]"
 ```
 
 ### Protocol Format
@@ -94,104 +97,146 @@ sequenceDiagram
 ```mermaid
 graph LR
     subgraph "Request Format"
-        OP[Op Ordinal<br/>4 bytes] --> SIZE[Args Size<br/>4 bytes]
-        SIZE --> ARGS[Arguments<br/>N bytes]
+        OP[Operation<br/>4 bytes int] --> SIZE[Args Length<br/>4 bytes int]
+        SIZE --> ARGS[Arguments<br/>UTF-8 string]
     end
     
     subgraph "Response Format"
-        RSIZE[Response Size<br/>4 bytes] --> RDATA[Response Data<br/>N bytes]
+        RSIZE[Response Length<br/>4 bytes int] --> RDATA[Response Data<br/>UTF-8 string]
     end
 ```
 
 ## Features
 
-- **Custom Binary Protocol**: Efficient binary protocol with operation codes and length-prefixed arguments
-- **Reactive Pub/Sub**: Publish/subscribe messaging using Java Flow API with backpressure support
-- **Data Structure Accumulation**: Optional message accumulation in Lists or Hash Sets per subscriber
-- **High Performance**: Built on Netty with optimized channel options
-- **Spring Integration**: Managed lifecycle with Spring Boot
-- **Scalable**: Configurable thread pools for boss and worker groups
+- **Custom Binary Protocol**: Efficient length-prefixed binary protocol with operation codes
+- **Reactive Pub/Sub**: Built on Java Flow API (SubmissionPublisher) with backpressure support
+- **Data Structure Accumulation**: Optional message accumulation in Lists or Sets per subscriber
+- **High Performance**: Built on Netty with optimized channel options and thread pools
+- **Thread-Safe**: Concurrent collections and proper synchronization throughout
+- **Spring Integration**: Full lifecycle management with Spring Boot and dependency injection
+- **Connection Resilience**: Automatic retry logic with exponential backoff
+- **Clean Architecture**: Dependency injection, proper encapsulation, and separation of concerns
+
+## Core Concepts
+
+### Publisher Ownership Model
+
+Each `Publisher` instance directly owns its subscribers:
+
+```java
+public class Publisher extends SubmissionPublisher<String> {
+    // Each publisher owns its subscriber contexts
+    private final Set<ChannelHandlerContext> subscribers;
+    private final Map<ChannelHandlerContext, DataStructureSubscriber> subscriberMap;
+}
+```
+
+**Benefits**:
+- Direct ownership - no external registrar needed
+- Better encapsulation - subscribers are private
+- Simpler design - follows Information Expert principle
+- More efficient - direct access instead of map lookups
+
+### Data Structures
+
+Subscribers can choose how to receive messages:
+
+- **NONE** (default): Receive each message individually as published
+- **LIST** (`[]`): Accumulate messages in order, receive entire list after each publish
+- **HASH** (`#{}`): Accumulate unique messages, receive entire set after each publish
 
 ## Supported Operations
 
 ### SUBSCRIBE
 
-Subscribe to a channel to receive published messages with optional data structure accumulation.
+Subscribe to a channel with optional data structure accumulation.
 
 **Format**: `SUBSCRIBE <channel> [data_structure]`
 
 **Data Structures**:
-
-- `[]` - Accumulate messages in a list (append each message)
-- `#{}` - Accumulate messages in a hash set (unique messages only)
-- (empty) - Just receive messages without accumulation
+- `[]` - Accumulate messages in a List (preserves order, allows duplicates)
+- `#{}` - Accumulate messages in a Set (unique messages only)
+- (empty) - No accumulation, receive each message individually
 
 **Examples**:
-
 ```
-SUBSCRIBE news           # Just receive messages
-SUBSCRIBE logs []        # Accumulate in list
-SUBSCRIBE metrics #{}    # Accumulate unique messages in hash
+SUBSCRIBE news           # Receive each message: "hello", "world"
+SUBSCRIBE logs []        # Receive accumulated list: "[hello]", "[hello, world]"
+SUBSCRIBE metrics #{}    # Receive unique set: "[hello]", "[hello, world]"
 ```
 
 **Behavior**:
-
-- **Without DS**: Receives each message individually as published
-- **With LIST**: Receives the entire list after each new message: `[msg1, msg2, msg3]`
-- **With HASH**: Receives the entire set after each new message: `[msg1, msg2]` (duplicates removed)
+- Creates publisher for channel if it doesn't exist
+- Adds subscriber context to publisher's subscriber set
+- Returns confirmation: `OK: Subscribed to channel: <channel>`
 
 ### PUBLISH
 
-Publish a message to a channel. All subscribers receive the message according to their data structure preference.
+Publish a message to all subscribers of a channel.
 
 **Format**: `PUBLISH <channel> <message>`
 
 **Examples**:
-
 ```
-PUBLISH news "Breaking news"
-PUBLISH logs "Error occurred"
+PUBLISH news "Breaking news story"
+PUBLISH logs "ERROR: Connection failed"
 PUBLISH metrics "cpu:95"
 ```
 
 **Behavior**:
+- Finds publisher for the channel
+- Submits message to all subscribers using Flow API
+- Each subscriber receives based on their data structure setting
+- Returns: `OK: Published to N subscriber(s)` or `WARN: No subscribers`
 
-- Message is sent to all subscribers of the channel
-- Subscribers with `[]` (LIST) will accumulate messages in order
-- Subscribers with `#{}` (HASH) will accumulate unique messages only
-- Subscribers without DS will receive each message individually
+### UNSUBSCRIBE
 
-**Response**: Message delivery depends on subscriber's data structure setting
+Unsubscribe from a channel.
+
+**Format**: `UNSUBSCRIBE <channel>`
+
+**Examples**:
+```
+UNSUBSCRIBE news
+```
+
+**Behavior**:
+- Removes subscriber from publisher's subscriber set
+- Cancels the Flow subscription
+- Returns: `OK: Unsubscribed from channel: <channel>`
 
 ## Project Structure
 
 ```
 mudis/
 ├── src/main/java/io/mudis/mudis/
-│   ├── MudisApplication.java          # Spring Boot application entry point
+│   ├── CLI.java                       # Spring Boot + Shell application entry
 │   ├── client/
 │   │   ├── Client.java                # Client interface
-│   │   ├── MudisClient.java           # Netty-based client implementation
-│   │   └── MudisClientHandler.java    # Client message handler
+│   │   ├── ClientImpl.java            # Netty client with retry logic
+│   │   └── ClientHandler.java         # Client message handler
 │   ├── server/
 │   │   ├── Server.java                # Server interface
-│   │   ├── MudisServer.java           # Netty-based server implementation
-│   │   ├── MudisServerHandler.java    # Server message handler
-│   │   └── config/
-│   │       └── ServerConfig.java      # Spring configuration
+│   │   ├── ServerImpl.java            # Netty server implementation
+│   │   └── ServerHandler.java         # Server message handler
 │   ├── codec/
-│   │   ├── MudisClientCodec.java      # Client protocol codec
-│   │   └── MudisServerCodec.java      # Server protocol codec
+│   │   ├── ClientCodec.java           # Client protocol codec
+│   │   └── ServerCodec.java           # Server protocol codec
 │   ├── model/
-│   │   ├── Message.java               # Message types (Subscribe, Publish)
-│   │   ├── Op.java                    # Operation enum
-│   │   └── Ds.java                    # Data structure enum
+│   │   ├── Message.java               # Sealed interface: Subscribe/Publish/Unsubscribe
+│   │   ├── Operation.java             # Enum: SUBSCRIBE, PUBLISH, UNSUBSCRIBE
+│   │   └── DataStructure.java         # Enum: NONE, LIST, HASH
 │   ├── pubsub/
-│   │   ├── Publisher.java             # Flow.Publisher implementation
-│   │   └── PublishRegistrar.java      # Channel-to-Publisher registry
+│   │   ├── Publisher.java             # Flow.Publisher with subscriber ownership
+│   │   └── PublishRegistrar.java      # Channel → Publisher registry
+│   ├── mq/
+│   │   └── MessageQueue.java          # Client-side message queue
+│   ├── utils/
+│   │   └── RequestValidator.java      # Protocol validation
 │   └── shell/
-│       ├── KVCommands.java            # Key-value shell commands
-│       └── PubSubCommands.java        # Pub/sub shell commands
+│       ├── ServiceCommands.java       # Start/stop/status commands
+│       ├── PubSubCommands.java        # Pub/sub commands
+│       └── KVCommands.java            # (Reserved for future KV operations)
 └── src/main/resources/
     └── application.yml                # Configuration
 ```
@@ -207,144 +252,243 @@ spring:
 
 mudis:
   server:
-    port: 8888
-    host: localhost
+    port: 6379      # Server port (Redis default)
+    host: 0.0.0.0   # Bind address (all interfaces)
 ```
 
-### Channel Options
+### Netty Channel Options
 
-**Server Options**:
+**Server Configuration**:
+```text
+.option(ChannelOption.SO_BACKLOG, 1024)        // Pending connection queue
+.option(ChannelOption.SO_REUSEADDR, true)      // Allow address reuse
+.childOption(ChannelOption.TCP_NODELAY, true)  // Disable Nagle for low latency
+.childOption(ChannelOption.SO_KEEPALIVE, true) // TCP keepalive
+```
 
-- `SO_BACKLOG: 1024` - Maximum pending connections
-- `SO_REUSEADDR: true` - Allow address reuse
-- `TCP_NODELAY: true` - Disable Nagle's algorithm for low latency
-- `SO_KEEPALIVE: true` - Detect dead connections
+**Client Configuration**:
+```text
+.option(ChannelOption.TCP_NODELAY, true)              // Low latency
+.option(ChannelOption.SO_KEEPALIVE, true)             // Connection health
+.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)   // 5s timeout
+```
 
-**Client Options**:
+### Thread Pools
 
-- `TCP_NODELAY: true` - Low latency
-- `SO_KEEPALIVE: true` - Connection health
-- `CONNECT_TIMEOUT_MILLIS: 5000` - Connection timeout
-
-## Thread Pools
-
-- **Boss Group**: 4 threads (accepts connections)
-- **Worker Group**: 2 threads (handles I/O)
-- **Client Worker Group**: 1 thread per client
+- **Server Boss Group**: 1 thread (accepts connections)
+- **Server Worker Group**: 4 threads (handles I/O operations)
+- **Client Worker Group**: 1 thread per client instance
 
 ## Getting Started
+
+### Prerequisites
+
+- Java 17 or higher
+- Maven 3.6+
 
 ### Running the Server
 
 ```bash
+# Build the project
+mvn clean install
+
+# Run the application
 mvn spring-boot:run
+
+# Or run the JAR
+java -jar target/mudis-1.0.0.jar
 ```
 
-### Using the Client
+### Using the CLI
+
+The application includes an interactive Spring Shell interface:
+
+```bash
+mudis:> start
+✓ Server started
+✓ Client connected
+Mudis service ready!
+
+mudis:> status
+=== Mudis Status ===
+Server: RUNNING
+Client: CONNECTED
+Active Channels: 0
+
+mudis:> SUBSCRIBE news
+Subscription request sent
+OK: Subscribed to channel: news
+
+mudis:> PUBLISH news "Hello, World!"
+Message sent
+OK: Published to 1 subscriber(s)
+Hello, World!
+
+mudis:> SUBSCRIBE logs []
+Subscription request sent
+OK: Subscribed to channel: logs
+
+mudis:> PUBLISH logs "Error 1"
+Message sent
+OK: Published to 1 subscriber(s)
+[Error 1]
+
+mudis:> PUBLISH logs "Error 2"
+Message sent
+OK: Published to 1 subscriber(s)
+[Error 1, Error 2]
+
+mudis:> channels
+=== Active Channels (2) ===
+• news
+• logs
+
+mudis:> cleanup
+Cleaned up 0 inactive channel(s).
+
+mudis:> stop
+✓ Client disconnected
+✓ Server stopped
+✓ Pub/Sub system cleaned up
+Mudis service stopped!
+```
+
+### Programmatic Usage
 
 ```java
-
 @Autowired
-private ApplicationContext context;
+private Client client;
 
 public void example() {
-    // Get a new client instance (prototype scope)
-    MudisClient client = context.getBean(MudisClient.class);
-
     // Connect to server
     client.connect();
 
-    // Subscribe without data structure (receive messages individually)
-    client.sendMessage("SUBSCRIBE news");
+    // Subscribe without accumulation (receive each message)
+    client.send("SUBSCRIBE news");
 
-    // Subscribe with LIST (accumulate all messages)
-    client.sendMessage("SUBSCRIBE logs []");
+    // Subscribe with LIST accumulation
+    client.send("SUBSCRIBE logs []");
 
-    // Subscribe with HASH (accumulate unique messages)
-    client.sendMessage("SUBSCRIBE metrics #{}");
+    // Subscribe with HASH accumulation (unique only)
+    client.send("SUBSCRIBE metrics #{}");
 
     // Publish messages
-    client.sendMessage("PUBLISH news Hello");
-    client.sendMessage("PUBLISH logs Error1");
-    client.sendMessage("PUBLISH logs Error2");
-    // Client subscribed to logs will receive: "[Error1, Error2]"
+    client.send("PUBLISH news Breaking news");
+    client.send("PUBLISH logs Error occurred");
+    client.send("PUBLISH logs Error occurred");  // Duplicate
+    // LIST subscriber sees: "[Error occurred, Error occurred]"
+    // HASH subscriber would see: "[Error occurred]"
 
-    client.sendMessage("PUBLISH metrics cpu:80");
-    client.sendMessage("PUBLISH metrics cpu:80");
-    // Client subscribed to metrics will receive: "[cpu:80]" (duplicate ignored)
+    // Unsubscribe
+    client.send("UNSUBSCRIBE news");
 
     // Disconnect
     client.disconnect();
 }
 ```
 
-### Command Line Interface
-
-The application includes a Spring Shell interface for interactive testing:
-
-```bash
-# Start the application
-mvn spring-boot:run
-
-# In the shell - Subscribe without accumulation
-mudis> subscribe news
-# Receives each message individually
-
-# Subscribe with LIST accumulation
-mudis> subscribe logs []
-# Receives: "[msg1]", then "[msg1, msg2]", then "[msg1, msg2, msg3]", etc.
-
-# Subscribe with HASH accumulation
-mudis> subscribe metrics #{}
-# Receives: "[msg1]", then "[msg1, msg2]", etc. (duplicates removed)
-
-# Publish messages
-mudis> publish news "Breaking News"
-mudis> publish logs "Error occurred"
-mudis> publish metrics "cpu:95"
-```
-
 ## Protocol Details
 
-### Message Encoding (Client → Server)
+### Wire Format
 
-1. **Operation Ordinal** (4 bytes): Integer representing the operation
-    - 0 = PUBLISH
-    - 1 = SUBSCRIBE
+All integers are big-endian (network byte order).
 
-2. **Arguments Size** (4 bytes): Length of arguments in bytes
+**Request (Client → Server)**:
+```
++------------------+------------------+------------------+
+| Operation (int)  | Args Length (int)| Arguments (UTF-8)|
+|    4 bytes       |    4 bytes       |    N bytes       |
++------------------+------------------+------------------+
+```
 
-3. **Arguments** (N bytes): Space-delimited UTF-8 string
-    - SUBSCRIBE: `<channel> [ds]` where ds is `[]` or `#{}`
-    - PUBLISH: `<channel> <message>`
+**Response (Server → Client)**:
+```
++------------------+------------------+
+| Length (int)     | Response (UTF-8) |
+|    4 bytes       |    N bytes       |
++------------------+------------------+
+```
 
-### Response Encoding (Server → Client)
+### Operation Codes
 
-1. **Response Size** (4 bytes): Length of response string
+- `0` - PUBLISH
+- `1` - SUBSCRIBE
+- `2` - UNSUBSCRIBE
 
-2. **Response Data** (N bytes): UTF-8 string
-    - Without DS: Individual message (e.g., `"hello"`)
-    - With LIST: Accumulated list as string (e.g., `"[msg1, msg2, msg3]"`)
-    - With HASH: Accumulated set as string (e.g., `"[msg1, msg2]"`)
+### Argument Formats
 
-### Data Structure Behavior
+**SUBSCRIBE**: `<channel> [data_structure]`
+- channel: Required, max 256 bytes
+- data_structure: Optional, either `[]` or `#{}`
 
-**LIST (`[]`)**:
+**PUBLISH**: `<channel> <message>`
+- channel: Required, max 256 bytes
+- message: Required, max 1MB
 
-- Accumulates messages in insertion order
-- Backed by `ArrayList`
-- Each publish appends to the list
-- Subscriber receives entire list after each message
+**UNSUBSCRIBE**: `<channel>`
+- channel: Required, max 256 bytes
 
-**HASH (`#{}`)**:
+### Size Limits
 
-- Accumulates unique messages only
-- Backed by `LinkedHashSet`
-- Duplicates are ignored
-- Subscriber receives entire set after each message
+```text
+MAX_SUBSCRIBE_ARGS = 256 bytes
+MAX_UNSUBSCRIBE_ARGS = 256 bytes
+MAX_PUBLISH_ARGS = 1MB (1,048,576 bytes)
+```
 
-**NONE (default)**:
+### Connection Errors
 
-- No accumulation
-- Subscriber receives each message individually
-- Lowest memory footprint
+Client automatically retries failed connections:
+- Max 3 attempts
+- 1 second delay between attempts
+- Exponential backoff can be added
+
+### Protocol Errors
+
+All validation errors are caught and logged:
+- Invalid operation codes
+- Argument size violations
+- Malformed messages
+
+### Runtime Errors
+
+- Channel disconnects automatically clean up subscriptions
+- Publishers are removed when no subscribers remain
+- Proper resource cleanup on shutdown
+
+## Performance Characteristics
+
+### Throughput
+
+- Built on Netty's high-performance event loop
+- Zero-copy buffer operations where possible
+- Minimal object allocation in hot paths
+
+### Latency
+
+- `TCP_NODELAY` enabled for low latency
+- Direct subscriber notification (no queue overhead)
+- Efficient binary protocol
+
+### Memory
+
+- Concurrent collections for lock-free reads
+- Subscribers cleaned up immediately on disconnect
+- Publishers removed when channels are inactive
+
+## Future Enhancements
+
+- [ ] Key-Value store operations (GET, SET, DEL)
+- [ ] Persistence layer
+- [ ] Message TTL and expiration
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Acknowledgments
+
+Built with:
+- [Netty](https://netty.io/) - High-performance networking
+- [Spring Boot](https://spring.io/projects/spring-boot) - Application framework
+- [Spring Shell](https://spring.io/projects/spring-shell) - Interactive CLI

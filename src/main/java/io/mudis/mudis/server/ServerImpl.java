@@ -1,7 +1,9 @@
 package io.mudis.mudis.server;
 
 import io.mudis.mudis.codec.ServerCodec;
+import io.mudis.mudis.pubsub.PublisherRegistrar;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -11,19 +13,26 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Netty-based server implementation for Mudis pub/sub system.
+ */
 @Component
 public class ServerImpl implements Server {
     private static final Logger Log = LoggerFactory.getLogger(ServerImpl.class);
+    private static final int BOSS_THREADS = 1;
+    private static final int WORKER_THREADS = 4;
 
     private final MultiThreadIoEventLoopGroup bossGroup;
     private final MultiThreadIoEventLoopGroup workerGroup;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final PublisherRegistrar publishRegistrar;
 
     @Value("${mudis.server.port:6379}")
     private int port;
@@ -33,23 +42,25 @@ public class ServerImpl implements Server {
 
     private volatile ServerSocketChannel serverChannel;
 
-    public ServerImpl() {
-        this.bossGroup = new MultiThreadIoEventLoopGroup(4, NioIoHandler.newFactory());
-        this.workerGroup = new MultiThreadIoEventLoopGroup(8, NioIoHandler.newFactory());
+    @Autowired
+    public ServerImpl(PublisherRegistrar publishRegistrar) {
+        this.publishRegistrar = publishRegistrar;
+        this.bossGroup = new MultiThreadIoEventLoopGroup(BOSS_THREADS, NioIoHandler.newFactory());
+        this.workerGroup = new MultiThreadIoEventLoopGroup(WORKER_THREADS, NioIoHandler.newFactory());
     }
 
     @Override
     public void start() {
-        if (running.getAndSet(true)) {
+        if (!running.compareAndSet(false, true)) {
             Log.warn("Server is already running");
             return;
         }
 
-        ServerBootstrap bootstrap = new ServerBootstrap();
         try {
             Log.info("Starting Mudis server on {}:{}", host, port);
 
-            serverChannel = (ServerSocketChannel) bootstrap
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            ChannelFuture future = bootstrap
                     .group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
                     .option(ChannelOption.SO_BACKLOG, 1024)
@@ -61,23 +72,22 @@ public class ServerImpl implements Server {
                         protected void initChannel(SocketChannel ch) {
                             ch.pipeline()
                                     .addLast(new ServerCodec())
-                                    .addLast(new ServerHandler());
+                                    .addLast(new ServerHandler(publishRegistrar));
                         }
                     })
                     .bind(host, port)
-                    .sync()
-                    .channel();
+                    .sync();
 
+            serverChannel = (ServerSocketChannel) future.channel();
             Log.info("Mudis server started successfully on {}:{}", host, port);
+
             serverChannel.closeFuture().sync();
 
         } catch (InterruptedException e) {
             Log.error("Server startup interrupted", e);
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Server startup interrupted", e);
         } catch (Exception e) {
             Log.error("Failed to start server", e);
-            throw new RuntimeException("Failed to start server", e);
         } finally {
             running.set(false);
             Log.info("Server stopped");
@@ -98,6 +108,14 @@ public class ServerImpl implements Server {
 
         Log.info("Stopping Mudis server...");
 
+        closeServerChannel();
+        shutdownEventLoops();
+
+        running.set(false);
+        Log.info("Mudis server stopped successfully");
+    }
+
+    private void closeServerChannel() {
         if (serverChannel != null && serverChannel.isActive()) {
             try {
                 serverChannel.close().sync();
@@ -107,7 +125,9 @@ public class ServerImpl implements Server {
                 Thread.currentThread().interrupt();
             }
         }
+    }
 
+    private void shutdownEventLoops() {
         try {
             bossGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
             workerGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
@@ -116,8 +136,5 @@ public class ServerImpl implements Server {
             Log.error("Error shutting down event loop groups", e);
             Thread.currentThread().interrupt();
         }
-
-        running.set(false);
-        Log.info("Mudis server stopped successfully");
     }
 }

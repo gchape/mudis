@@ -12,12 +12,14 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Netty-based client implementation for connecting to Mudis server.
+ */
 @Component
 public class ClientImpl implements Client {
     private static final Logger Log = LoggerFactory.getLogger(ClientImpl.class);
@@ -36,7 +38,6 @@ public class ClientImpl implements Client {
 
     private volatile Channel channel;
 
-    @Autowired
     public ClientImpl(MessageQueue messageQueue) {
         this.messageQueue = messageQueue;
         this.workerGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
@@ -50,24 +51,12 @@ public class ClientImpl implements Client {
         }
 
         Exception lastException = null;
+
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             try {
                 Log.info("Connecting to {}:{} (attempt {}/{})", host, port, attempt, MAX_RETRY_ATTEMPTS);
 
-                Bootstrap bootstrap = new Bootstrap();
-                channel = bootstrap.group(workerGroup)
-                        .channel(NioSocketChannel.class)
-                        .option(ChannelOption.TCP_NODELAY, true)
-                        .option(ChannelOption.SO_KEEPALIVE, true)
-                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECTION_TIMEOUT_MS)
-                        .handler(new ChannelInitializer<SocketChannel>() {
-                            @Override
-                            protected void initChannel(SocketChannel ch) {
-                                ch.pipeline()
-                                        .addLast(new ClientCodec())
-                                        .addLast(new ClientHandler(messageQueue));
-                            }
-                        })
+                channel = createBootstrap()
                         .connect(host, port)
                         .sync()
                         .channel();
@@ -76,20 +65,14 @@ public class ClientImpl implements Client {
                 return;
 
             } catch (InterruptedException e) {
-                Log.error("Connection interrupted", e);
                 Thread.currentThread().interrupt();
-                throw new RuntimeException("Failed to connect to server", e);
+                throw new RuntimeException("Connection interrupted", e);
             } catch (Exception e) {
                 lastException = e;
                 Log.warn("Connection attempt {} failed: {}", attempt, e.getMessage());
 
                 if (attempt < MAX_RETRY_ATTEMPTS) {
-                    try {
-                        Thread.sleep(RETRY_DELAY_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Connection retry interrupted", ie);
-                    }
+                    sleep();
                 }
             }
         }
@@ -107,12 +90,11 @@ public class ClientImpl implements Client {
             throw new IllegalStateException("Not connected to server");
         }
 
-        channel.writeAndFlush(msg)
-                .addListener(future -> {
-                    if (!future.isSuccess()) {
-                        Log.error("Failed to send message: {}", msg, future.cause());
-                    }
-                });
+        channel.writeAndFlush(msg).addListener(future -> {
+            if (!future.isSuccess()) {
+                Log.error("Failed to send message: {}", msg, future.cause());
+            }
+        });
     }
 
     @Override
@@ -122,22 +104,54 @@ public class ClientImpl implements Client {
 
     @Override
     public void disconnect() {
-        if (channel != null) {
-            try {
-                channel.close().sync();
-                Log.info("Disconnected from server");
-            } catch (InterruptedException e) {
-                Log.error("Error during disconnect", e);
-                Thread.currentThread().interrupt();
-            } finally {
-                try {
-                    workerGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
-                    Log.info("Worker group shut down");
-                } catch (InterruptedException e) {
-                    Log.error("Error shutting down worker group", e);
-                    Thread.currentThread().interrupt();
-                }
-            }
+        if (channel == null) {
+            return;
+        }
+
+        try {
+            channel.close().sync();
+            Log.info("Disconnected from server");
+        } catch (InterruptedException e) {
+            Log.error("Error during disconnect", e);
+            Thread.currentThread().interrupt();
+        } finally {
+            shutdownWorkerGroup();
+        }
+    }
+
+    private Bootstrap createBootstrap() {
+        return new Bootstrap()
+                .group(workerGroup)
+                .channel(NioSocketChannel.class)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECTION_TIMEOUT_MS)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    protected void initChannel(SocketChannel ch) {
+                        ch.pipeline()
+                                .addLast(new ClientCodec())
+                                .addLast(new ClientHandler(messageQueue));
+                    }
+                });
+    }
+
+    private void shutdownWorkerGroup() {
+        try {
+            workerGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
+            Log.info("Worker group shut down");
+        } catch (InterruptedException e) {
+            Log.error("Error shutting down worker group", e);
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void sleep() {
+        try {
+            Thread.sleep((long) ClientImpl.RETRY_DELAY_MS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Connection retry interrupted", ie);
         }
     }
 }

@@ -1,93 +1,119 @@
 package io.mudis.mudis.pubsub;
 
 import io.mudis.mudis.model.DataStructure;
+import io.netty.channel.ChannelHandlerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
-import java.util.function.Consumer;
 
+/**
+ * Publisher that manages its own subscribers and their data structures.
+ * Each publisher instance maintains its own set of subscriber contexts.
+ */
 public class Publisher extends SubmissionPublisher<String> {
     private static final Logger Log = LoggerFactory.getLogger(Publisher.class);
+    private final Set<ChannelHandlerContext> subscribers = ConcurrentHashMap.newKeySet();
+    private final Map<ChannelHandlerContext, DataStructureSubscriber> subscriberMap = new ConcurrentHashMap<>();
 
-    private final Map<Consumer<String>, Flow.Subscriber<String>> subscribers = new ConcurrentHashMap<>();
+    public void subscribe(DataStructure ds, ChannelHandlerContext ctx) {
+        DataStructureSubscriber subscriber = new DataStructureSubscriber(ds, ctx);
 
-    public void subscribe(DataStructure ds, Consumer<String> consumer) {
-        var subscriber = new DataStructureSubscriber(ds, consumer);
-        subscribers.put(consumer, subscriber);
+        subscribers.add(ctx);
+        subscriberMap.put(ctx, subscriber);
         super.subscribe(subscriber);
-        Log.info("New subscriber added with data structure: {}", ds);
+
+        Log.info("Client subscribed with data structure: {} (total: {})", ds, subscribers.size());
     }
 
-    public void unsubscribe(Consumer<String> consumer) {
-        Flow.Subscriber<String> subscriber = subscribers.remove(consumer);
+    public void unsubscribe(ChannelHandlerContext ctx) {
+        DataStructureSubscriber subscriber = subscriberMap.remove(ctx);
+
         if (subscriber != null) {
-            Log.info("Subscriber removed");
-            return;
+            subscribers.remove(ctx);
+            // Cancel the subscription
+            if (subscriber.subscription != null) {
+                subscriber.subscription.cancel();
+            }
+            Log.info("Client unsubscribed (remaining: {})", subscribers.size());
+        } else {
+            Log.warn("Attempted to unsubscribe non-existent subscriber");
         }
-        Log.warn("Subscriber not found");
     }
 
     public int getSubscriberCount() {
         return subscribers.size();
     }
 
+    public boolean isSubscribed(ChannelHandlerContext ctx) {
+        return subscribers.contains(ctx);
+    }
+
+    /**
+     * Subscriber implementation that handles different data structure types.
+     */
     private class DataStructureSubscriber implements Flow.Subscriber<String> {
-        private final DataStructure ds;
-        private final Consumer<String> consumer;
-        private Collection<String> collection;
+        private final DataStructure dataStructure;
+        private final ChannelHandlerContext ctx;
+        private final Collection<String> collection;
         private Flow.Subscription subscription;
 
-        public DataStructureSubscriber(DataStructure ds, Consumer<String> consumer) {
-            this.ds = ds;
-            this.consumer = consumer;
+        DataStructureSubscriber(DataStructure dataStructure, ChannelHandlerContext ctx) {
+            this.dataStructure = dataStructure;
+            this.ctx = ctx;
+            this.collection = createCollection(dataStructure);
+        }
+
+        private Collection<String> createCollection(DataStructure ds) {
+            return switch (ds) {
+                case LIST -> Collections.synchronizedList(new ArrayList<>());
+                case HASH -> ConcurrentHashMap.newKeySet();
+                case NONE -> null;
+            };
         }
 
         @Override
         public void onSubscribe(Flow.Subscription subscription) {
             this.subscription = subscription;
-            this.collection = switch (ds) {
-                case LIST -> Collections.synchronizedList(new ArrayList<>());
-                case HASH -> ConcurrentHashMap.newKeySet();
-                case NONE -> null;
-            };
-            this.subscription.request(1);
+            subscription.request(1);
+            Log.debug("Subscription established for {}", dataStructure);
         }
 
         @Override
-        public void onNext(String item) {
+        public void onNext(String message) {
             try {
-                if (collection != null) {
-                    collection.add(item);
-                    consumer.accept(collection.toString());
-                    Log.debug("Item added to {} collection: {}", ds, item);
-                } else {
-                    consumer.accept(item);
-                    Log.debug("Item forwarded: {}", item);
-                }
-                this.subscription.request(1);
+                String output = processMessage(message);
+                ctx.writeAndFlush(output);
+                subscription.request(1);
             } catch (Exception e) {
-                Log.error("Error processing item: {}", item, e);
+                Log.error("Error processing message: {}", message, e);
                 onError(e);
             }
+        }
+
+        private String processMessage(String message) {
+            if (collection != null) {
+                collection.add(message);
+                return collection.toString();
+            }
+            return message;
         }
 
         @Override
         public void onError(Throwable throwable) {
             Log.error("Subscriber error", throwable);
-            subscribers.remove(consumer);
+            subscribers.remove(ctx);
+            subscriberMap.remove(ctx);
         }
 
         @Override
         public void onComplete() {
             Log.info("Subscription completed");
-            subscribers.remove(consumer);
+            subscribers.remove(ctx);
+            subscriberMap.remove(ctx);
         }
     }
 }
