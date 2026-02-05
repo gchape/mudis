@@ -8,11 +8,10 @@ import io.netty.handler.codec.ByteToMessageCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.List;
 
-import static io.mudis.mudis.utils.Validation.validateArgsSize;
-import static io.mudis.mudis.utils.Validation.validateOperationInt;
+import static io.mudis.mudis.utils.RequestValidator.validateArgsSize;
+import static io.mudis.mudis.utils.RequestValidator.validateOperation;
 
 public class ServerCodec extends ByteToMessageCodec<String> {
     private static final Logger Log = LoggerFactory.getLogger(ServerCodec.class);
@@ -34,7 +33,7 @@ public class ServerCodec extends ByteToMessageCodec<String> {
         in.markReaderIndex();
         try {
             Operation op = readOperation(in);
-            String[] args = readArguments(in, op);
+            String args = readArguments(in, op);
 
             if (args == null) {
                 in.resetReaderIndex();
@@ -53,12 +52,12 @@ public class ServerCodec extends ByteToMessageCodec<String> {
 
     private Operation readOperation(ByteBuf in) {
         int ordinal = in.readInt();
-        validateOperationInt(ordinal);
+        validateOperation(ordinal);
 
         return Operation.values()[ordinal];
     }
 
-    private String[] readArguments(ByteBuf in, Operation op) {
+    private String readArguments(ByteBuf in, Operation op) {
         int size = in.readInt();
 
         validateArgsSize(size, op);
@@ -67,14 +66,13 @@ public class ServerCodec extends ByteToMessageCodec<String> {
             return null;
         }
         if (size == 0) {
-            return new String[0];
+            return "";
         }
 
         byte[] argsBytes = new byte[size];
         in.readBytes(argsBytes);
 
-        var args = new String(argsBytes);
-        return args.split(" ");
+        return new String(argsBytes);
     }
 
     @Override

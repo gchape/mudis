@@ -2,7 +2,7 @@ package io.mudis.mudis.utils;
 
 import io.mudis.mudis.model.Operation;
 
-public class Validation {
+public class RequestValidator {
     public static int MAX_SUBSCRIBE_ARGS_SIZE = 256;
     public static int MAX_UNSUBSCRIBE_ARGS_SIZE = 256;
     public static int MAX_PUBLISH_ARGS_SIZE = 1024 * 1024;
@@ -31,7 +31,7 @@ public class Validation {
         }
     }
 
-    public static void validateOperationInt(int ordinal) {
+    public static void validateOperation(int ordinal) {
         if (ordinal < 0 || ordinal >= Operation.values().length) {
             throw new IllegalStateException(
                     String.format("Invalid operation ordinal: %d (valid: 0-%d)",

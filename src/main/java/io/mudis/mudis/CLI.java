@@ -13,6 +13,7 @@ import org.springframework.shell.jline.PromptProvider;
                 "io.mudis.mudis.client",
                 "io.mudis.mudis.server",
                 "io.mudis.mudis.shell",
+                "io.mudis.mudis.mq",
         })
 public class CLI {
 

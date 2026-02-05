@@ -1,6 +1,7 @@
 package io.mudis.mudis.client;
 
 import io.mudis.mudis.codec.ClientCodec;
+import io.mudis.mudis.mq.MessageQueue;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -9,10 +10,9 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.LineBasedFrameDecoder;
-import io.netty.handler.codec.string.LineEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +25,7 @@ public class ClientImpl implements Client {
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private static final int RETRY_DELAY_MS = 1000;
 
+    private final MessageQueue messageQueue;
     private final MultiThreadIoEventLoopGroup workerGroup;
 
     @Value("${mudis.server.port:6379}")
@@ -35,7 +36,9 @@ public class ClientImpl implements Client {
 
     private volatile Channel channel;
 
-    public ClientImpl() {
+    @Autowired
+    public ClientImpl(MessageQueue messageQueue) {
+        this.messageQueue = messageQueue;
         this.workerGroup = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
     }
 
@@ -62,7 +65,7 @@ public class ClientImpl implements Client {
                             protected void initChannel(SocketChannel ch) {
                                 ch.pipeline()
                                         .addLast(new ClientCodec())
-                                        .addLast(new ClientHandler());
+                                        .addLast(new ClientHandler(messageQueue));
                             }
                         })
                         .connect(host, port)

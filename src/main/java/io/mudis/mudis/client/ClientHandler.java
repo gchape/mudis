@@ -1,25 +1,22 @@
 package io.mudis.mudis.client;
 
+import io.mudis.mudis.mq.MessageQueue;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-
 public class ClientHandler extends SimpleChannelInboundHandler<String> {
-    public static final BlockingQueue<String> systemOutQueue;
-    private static final Logger Log;
+    private static final Logger Log = LoggerFactory.getLogger(ClientHandler.class);
+    private final MessageQueue messageQueue;
 
-    static {
-        systemOutQueue = new LinkedBlockingQueue<>();
-        Log = LoggerFactory.getLogger(ClientHandler.class);
+    public ClientHandler(MessageQueue messageQueue) {
+        this.messageQueue = messageQueue;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, String response) {
-        systemOutQueue.add(response);
+        messageQueue.submit(response);
     }
 
     @Override

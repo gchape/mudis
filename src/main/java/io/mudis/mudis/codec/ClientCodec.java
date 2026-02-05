@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-import static io.mudis.mudis.utils.Validation.validateArgsBytes;
+import static io.mudis.mudis.utils.RequestValidator.validateArgsBytes;
 
 public class ClientCodec extends ByteToMessageCodec<String> {
     private static final Logger Log = LoggerFactory.getLogger(ClientCodec.class);

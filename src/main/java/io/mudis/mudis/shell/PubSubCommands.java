@@ -1,7 +1,7 @@
 package io.mudis.mudis.shell;
 
 import io.mudis.mudis.client.Client;
-import io.mudis.mudis.client.ClientHandler;
+import io.mudis.mudis.mq.MessageQueue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.NonNull;
@@ -10,26 +10,67 @@ import org.springframework.shell.core.command.annotation.Argument;
 import org.springframework.shell.core.command.annotation.Command;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Flow;
+import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 @Component
 public class PubSubCommands {
     private final Client client;
+    private final MessageQueue messageQueue;
 
     @Autowired
-    public PubSubCommands(Client client) {
+    public PubSubCommands(Client client, MessageQueue messageQueue) {
         this.client = client;
+        this.messageQueue = messageQueue;
     }
 
-    private @NonNull String waitForChannelResponseAndReturn(int n, String response) {
-        var channelOut = new StringBuilder(System.lineSeparator());
-        try {
-            for (int i = 0; i < n; i++) {
-                channelOut.append(ClientHandler.systemOutQueue.take())
-                        .append(System.lineSeparator());
+    private @NonNull String awaitServerMessages(int count, String prefix) {
+        var messages = new StringBuilder(System.lineSeparator());
+
+        var future = new CompletableFuture<Void>();
+        var counter = new AtomicInteger(0);
+        var subscriber = new Flow.Subscriber<String>() {
+            private Flow.Subscription subscription;
+
+            @Override
+            public void onSubscribe(Flow.Subscription subscription) {
+                this.subscription = subscription;
+                subscription.request(count);
             }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+
+            @Override
+            public void onNext(String item) {
+                messages.append(item).append(System.lineSeparator());
+                counter.incrementAndGet();
+
+                if (counter.get() >= count) {
+                    subscription.cancel();
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+
+            @Override
+            public void onComplete() {
+                future.complete(null);
+            }
+        };
+
+        messageQueue.subscribe(subscriber);
+        try {
+            future.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return prefix + " (timeout waiting for server response)";
         }
-        return response + channelOut;
+
+        return prefix + messages;
     }
 
     @Command(name = "PUBLISH",
@@ -45,16 +86,13 @@ public class PubSubCommands {
             @Argument(index = 1,
                     description = "The message to publish.")
             String message) {
+
         if (!client.isConnected()) {
             return "Client is not connected. Please connect first.";
         }
 
-        if (message.charAt(0) != '\"' && message.charAt(message.length() - 1) != '\"') {
-            return "Message should be quoted: \"message\".";
-        }
-
         client.send("PUBLISH " + channel + " " + message.replace("\"", ""));
-        return waitForChannelResponseAndReturn(2, "Message sent");
+        return awaitServerMessages(2, "Message sent");
     }
 
     @Command(name = "SUBSCRIBE",
@@ -86,7 +124,7 @@ public class PubSubCommands {
         }
 
         client.send("SUBSCRIBE " + channel + (ds.isBlank() ? "" : " " + ds));
-        return waitForChannelResponseAndReturn(1, "Subscription request sent");
+        return awaitServerMessages(1, "Subscription request sent");
     }
 
     @Command(name = "UNSUBSCRIBE",
@@ -102,6 +140,6 @@ public class PubSubCommands {
         }
 
         client.send("UNSUBSCRIBE " + channel);
-        return waitForChannelResponseAndReturn(1, "Unsubscribe request sent");
+        return awaitServerMessages(1, "Unsubscribe request sent");
     }
 }

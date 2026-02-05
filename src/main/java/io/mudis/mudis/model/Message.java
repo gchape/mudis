@@ -1,10 +1,14 @@
 package io.mudis.mudis.model;
 
-import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public sealed interface Message {
+    Pattern SUBSCRIBE_PATTERN = Pattern.compile("^([^ ]+)\\s*(.*)$");
+    Pattern PUBLISH_PATTERN = Pattern.compile("^([^ ]+)\\s+(.*)$");
+    Pattern UNSUBSCRIBE_PATTERN = Pattern.compile("^([^ ]+)$");
 
-    static Message of(Operation op, String[] args) {
+    static Message of(Operation op, String args) {
         return switch (op) {
             case SUBSCRIBE -> newSubscribeMessage(args);
             case PUBLISH -> newPublishMessage(args);
@@ -12,49 +16,42 @@ public sealed interface Message {
         };
     }
 
-    private static Message newSubscribeMessage(String[] args) {
-        if (args.length < 1 || args.length > 2) {
-            throw new IllegalStateException("SUBSCRIBE requires 1-2 args, got " + args.length);
+    private static Matcher getMatcher(Pattern pattern, String s) {
+        Matcher matcher = pattern.matcher(s);
+        if (!matcher.matches()) {
+            throw new IllegalStateException("Invalid input: " + s);
         }
-
-        if (args.length == 1) {
-            return new Message.Subscribe(args[0], DataStructure.NONE);
-        } else {
-            return new Message.Subscribe(args[0], DataStructure.from(args[1]));
-        }
+        return matcher;
     }
 
-    private static Message newPublishMessage(String[] args) {
-        if (args.length < 2) {
-            throw new IllegalStateException("PUBLISH requires 2+ args, got " + args.length);
-        }
+    private static Message newSubscribeMessage(String s) {
+        Matcher matcher = getMatcher(SUBSCRIBE_PATTERN, s);
+        String channel = matcher.group(1);
+        String ds = matcher.group(2);
 
-        var message = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-        return new Message.Publish(args[0], message);
+        return new Message.Subscribe(channel, ds.isEmpty() ? DataStructure.NONE : DataStructure.from(ds));
     }
 
-    private static Message newUnsubscribeMessage(String[] args) {
-        if (args.length != 1) {
-            throw new IllegalStateException("UNSUBSCRIBE requires 1 arg, got " + args.length);
-        }
+    private static Message newPublishMessage(String s) {
+        Matcher matcher = getMatcher(PUBLISH_PATTERN, s);
+        String channel = matcher.group(1);
+        String message = matcher.group(2);
 
-        return new Message.Unsubscribe(args[0]);
+        return new Message.Publish(channel, message);
     }
 
-    record Subscribe(
-            String channel,
-            DataStructure ds
-    ) implements Message {
+    private static Message newUnsubscribeMessage(String s) {
+        Matcher matcher = getMatcher(UNSUBSCRIBE_PATTERN, s);
+        String channel = matcher.group(1);
+        return new Message.Unsubscribe(channel);
     }
 
-    record Publish(
-            String channel,
-            String message
-    ) implements Message {
+    record Subscribe(String channel, DataStructure ds) implements Message {
     }
 
-    record Unsubscribe(
-            String channel
-    ) implements Message {
+    record Publish(String channel, String message) implements Message {
+    }
+
+    record Unsubscribe(String channel) implements Message {
     }
 }
