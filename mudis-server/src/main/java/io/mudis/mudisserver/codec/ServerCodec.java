@@ -2,7 +2,6 @@ package io.mudis.mudisserver.codec;
 
 import io.mudis.mudisserver.model.Message;
 import io.mudis.mudisserver.model.Operation;
-import io.mudis.mudisserver.utils.RequestValidator;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;
@@ -37,7 +36,7 @@ public class ServerCodec extends ByteToMessageCodec<String> {
 
         try {
             Operation op = readOperation(in);
-            String args = readArguments(in, op);
+            String args = readArguments(in);
 
             if (args == null) {
                 in.resetReaderIndex();
@@ -62,14 +61,11 @@ public class ServerCodec extends ByteToMessageCodec<String> {
 
     private Operation readOperation(ByteBuf in) {
         int ordinal = in.readInt();
-        RequestValidator.validateOperation(ordinal);
         return Operation.values()[ordinal];
     }
 
-    private String readArguments(ByteBuf in, Operation op) {
+    private String readArguments(ByteBuf in) {
         int size = in.readInt();
-
-        RequestValidator.validateArgsSize(size, op);
 
         if (in.readableBytes() < size) {
             return null;

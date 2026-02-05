@@ -1,7 +1,6 @@
 package io.mudis.mudisclient.codec;
 
 import io.mudis.mudisclient.model.Operation;
-import io.mudis.mudisclient.utils.RequestValidator;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;
@@ -30,8 +29,6 @@ public class ClientCodec extends ByteToMessageCodec<String> {
 
         Operation op = parseOperation(parts[0]);
         byte[] argsBytes = getArgumentsBytes(parts);
-
-        RequestValidator.validateArgsBytes(argsBytes, op);
 
         out.writeInt(op.ordinal());
         out.writeInt(argsBytes.length);
