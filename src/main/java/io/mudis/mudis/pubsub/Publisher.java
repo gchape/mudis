@@ -14,24 +14,24 @@ import java.util.concurrent.SubmissionPublisher;
 import java.util.function.Consumer;
 
 public class Publisher extends SubmissionPublisher<String> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Publisher.class);
+    private static final Logger Log = LoggerFactory.getLogger(Publisher.class);
 
     private final Map<Consumer<String>, Flow.Subscriber<String>> subscribers = new ConcurrentHashMap<>();
 
     public void subscribe(DataStructure ds, Consumer<String> consumer) {
-        DataStructureSubscriber subscriber = new DataStructureSubscriber(ds, consumer);
+        var subscriber = new DataStructureSubscriber(ds, consumer);
         subscribers.put(consumer, subscriber);
         super.subscribe(subscriber);
-        LOGGER.info("New subscriber added with data structure: {}", ds);
+        Log.info("New subscriber added with data structure: {}", ds);
     }
 
     public void unsubscribe(Consumer<String> consumer) {
         Flow.Subscriber<String> subscriber = subscribers.remove(consumer);
         if (subscriber != null) {
-            LOGGER.info("Subscriber removed");
+            Log.info("Subscriber removed");
             return;
         }
-        LOGGER.warn("Subscriber not found");
+        Log.warn("Subscriber not found");
     }
 
     public int getSubscriberCount() {
@@ -66,27 +66,27 @@ public class Publisher extends SubmissionPublisher<String> {
                 if (collection != null) {
                     collection.add(item);
                     consumer.accept(collection.toString());
-                    LOGGER.debug("Item added to {} collection: {}", ds, item);
+                    Log.debug("Item added to {} collection: {}", ds, item);
                 } else {
                     consumer.accept(item);
-                    LOGGER.debug("Item forwarded: {}", item);
+                    Log.debug("Item forwarded: {}", item);
                 }
                 this.subscription.request(1);
             } catch (Exception e) {
-                LOGGER.error("Error processing item: {}", item, e);
+                Log.error("Error processing item: {}", item, e);
                 onError(e);
             }
         }
 
         @Override
         public void onError(Throwable throwable) {
-            LOGGER.error("Subscriber error", throwable);
+            Log.error("Subscriber error", throwable);
             subscribers.remove(consumer);
         }
 
         @Override
         public void onComplete() {
-            LOGGER.info("Subscription completed");
+            Log.info("Subscription completed");
             subscribers.remove(consumer);
         }
     }

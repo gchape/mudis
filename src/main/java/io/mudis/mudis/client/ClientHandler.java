@@ -8,13 +8,13 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class MudisClientHandler extends SimpleChannelInboundHandler<String> {
+public class ClientHandler extends SimpleChannelInboundHandler<String> {
     public static final BlockingQueue<String> systemOutQueue;
     private static final Logger Log;
 
     static {
         systemOutQueue = new LinkedBlockingQueue<>();
-        Log = LoggerFactory.getLogger(MudisClientHandler.class);
+        Log = LoggerFactory.getLogger(ClientHandler.class);
     }
 
     @Override

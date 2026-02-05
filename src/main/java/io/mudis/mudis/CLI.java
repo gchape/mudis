@@ -14,10 +14,10 @@ import org.springframework.shell.jline.PromptProvider;
                 "io.mudis.mudis.server",
                 "io.mudis.mudis.shell",
         })
-public class MudisCLI {
+public class CLI {
 
     static void main(String... args) {
-        SpringApplication.run(MudisCLI.class, args);
+        SpringApplication.run(CLI.class, args);
     }
 
     @Bean

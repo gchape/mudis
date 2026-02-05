@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 public enum PublishRegistrar {
     INSTANCE;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PublishRegistrar.class);
+    private static final Logger Log = LoggerFactory.getLogger(PublishRegistrar.class);
     private final Map<String, Publisher> publishers = new ConcurrentHashMap<>();
 
     public Publisher getOrCreate(String channel, Supplier<Publisher> supplier) {
@@ -21,7 +21,7 @@ public enum PublishRegistrar {
 
         return publishers.computeIfAbsent(channel, _ -> {
             Publisher publisher = supplier.get();
-            LOGGER.info("Created publisher for channel: {}", channel);
+            Log.info("Created publisher for channel: {}", channel);
             return publisher;
         });
     }
@@ -38,7 +38,7 @@ public enum PublishRegistrar {
         Publisher publisher = publishers.remove(channel);
         if (publisher != null) {
             publisher.close();
-            LOGGER.info("Removed and closed publisher for channel: {}", channel);
+            Log.info("Removed and closed publisher for channel: {}", channel);
             return true;
         }
         return false;
@@ -54,21 +54,21 @@ public enum PublishRegistrar {
             }
         }
         if (removed > 0) {
-            LOGGER.info("Cleaned up {} inactive channels", removed);
+            Log.info("Cleaned up {} inactive channels", removed);
         }
         return removed;
     }
 
     public void shutdown() {
-        LOGGER.info("Shutting down PublishRegistrar with {} channels", publishers.size());
+        Log.info("Shutting down PublishRegistrar with {} channels", publishers.size());
         publishers.forEach((channel, publisher) -> {
             try {
                 publisher.close();
             } catch (Exception e) {
-                LOGGER.error("Error closing publisher for channel: {}", channel, e);
+                Log.error("Error closing publisher for channel: {}", channel, e);
             }
         });
         publishers.clear();
-        LOGGER.info("PublishRegistrar shutdown complete");
+        Log.info("PublishRegistrar shutdown complete");
     }
 }

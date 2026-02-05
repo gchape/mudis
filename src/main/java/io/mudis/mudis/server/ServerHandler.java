@@ -12,20 +12,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MudisServerHandler.class);
-
+public class ServerHandler extends SimpleChannelInboundHandler<Message> {
+    private static final Logger Log = LoggerFactory.getLogger(ServerHandler.class);
     private final Map<String, Consumer<String>> channelSubscriptions = new ConcurrentHashMap<>();
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Message msg) {
         if (msg == null) {
-            LOGGER.warn("Received null message");
+            Log.warn("Received null message");
             sendError(ctx, "Invalid message");
             return;
         }
 
-        LOGGER.info("Received message: {}", msg);
+        Log.info("Received message: {}", msg);
 
         try {
             switch (msg) {
@@ -34,7 +33,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
                 case Message.Unsubscribe unsub -> handleUnsubscribe(ctx, unsub);
             }
         } catch (Exception e) {
-            LOGGER.error("Error handling message: {}", msg, e);
+            Log.error("Error handling message: {}", msg, e);
             sendError(ctx, "Error processing message: " + e.getMessage());
         }
     }
@@ -47,7 +46,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
             return;
         }
 
-        LOGGER.info("Client subscribing to channel: {}", channel);
+        Log.info("Client subscribing to channel: {}", channel);
 
         Publisher publisher = PublishRegistrar.INSTANCE.getOrCreate(
                 channel,
@@ -60,12 +59,12 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
         publisher.subscribe(sub.ds(), consumer);
         ctx.writeAndFlush("OK: Subscribed to channel: " + channel);
 
-        LOGGER.info("Client successfully subscribed to channel: {}", channel);
+        Log.info("Client successfully subscribed to channel: {}", channel);
     }
 
     private void handlePublish(ChannelHandlerContext ctx, Message.Publish pub) {
-        String channel = pub.channel();
-        String message = pub.message();
+        var channel = pub.channel();
+        var message = pub.message();
 
         if (channel == null || channel.trim().isEmpty()) {
             sendError(ctx, "Channel name cannot be empty");
@@ -77,7 +76,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
             return;
         }
 
-        LOGGER.info("Client publishing to channel: {}", channel);
+        Log.info("Client publishing to channel: {}", channel);
 
         Publisher publisher = PublishRegistrar.INSTANCE.get(channel);
         if (publisher == null) {
@@ -89,7 +88,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
         ctx.writeAndFlush(String.format("OK: Published to %d subscriber(s)",
                 publisher.getSubscriberCount()));
 
-        LOGGER.debug("Message published to channel: {} (lag: {})", channel, lag);
+        Log.debug("Message published to channel: {} (lag: {})", channel, lag);
     }
 
     private void handleUnsubscribe(ChannelHandlerContext ctx, Message.Unsubscribe unsub) {
@@ -100,7 +99,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
             return;
         }
 
-        LOGGER.info("Client unsubscribing from channel: {}", channel);
+        Log.info("Client unsubscribing from channel: {}", channel);
 
         Consumer<String> consumer = channelSubscriptions.remove(channel);
         if (consumer == null) {
@@ -112,7 +111,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
         if (publisher != null) {
             publisher.unsubscribe(consumer);
             ctx.writeAndFlush("OK: Unsubscribed from channel: " + channel);
-            LOGGER.info("Client unsubscribed from channel: {}", channel);
+            Log.info("Client unsubscribed from channel: {}", channel);
         } else {
             sendError(ctx, "Channel not found: " + channel);
         }
@@ -135,7 +134,7 @@ public class MudisServerHandler extends SimpleChannelInboundHandler<Message> {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        LOGGER.error("Exception in server handler", cause);
+        Log.error("Exception in server handler", cause);
         sendError(ctx, "Internal server error");
         ctx.close();
     }

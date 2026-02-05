@@ -1,6 +1,6 @@
 package io.mudis.mudis.server;
 
-import io.mudis.mudis.codec.MudisServerCodec;
+import io.mudis.mudis.codec.ServerCodec;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -18,8 +18,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
-public class MudisServer implements Server {
-    private static final Logger LOGGER = LoggerFactory.getLogger(MudisServer.class);
+public class ServerImpl implements Server {
+    private static final Logger Log = LoggerFactory.getLogger(ServerImpl.class);
 
     private final MultiThreadIoEventLoopGroup bossGroup;
     private final MultiThreadIoEventLoopGroup workerGroup;
@@ -33,7 +33,7 @@ public class MudisServer implements Server {
 
     private volatile ServerSocketChannel serverChannel;
 
-    public MudisServer() {
+    public ServerImpl() {
         this.bossGroup = new MultiThreadIoEventLoopGroup(4, NioIoHandler.newFactory());
         this.workerGroup = new MultiThreadIoEventLoopGroup(8, NioIoHandler.newFactory());
     }
@@ -41,13 +41,13 @@ public class MudisServer implements Server {
     @Override
     public void start() {
         if (running.getAndSet(true)) {
-            LOGGER.warn("Server is already running");
+            Log.warn("Server is already running");
             return;
         }
 
         ServerBootstrap bootstrap = new ServerBootstrap();
         try {
-            LOGGER.info("Starting Mudis server on {}:{}", host, port);
+            Log.info("Starting Mudis server on {}:{}", host, port);
 
             serverChannel = (ServerSocketChannel) bootstrap
                     .group(bossGroup, workerGroup)
@@ -60,27 +60,27 @@ public class MudisServer implements Server {
                         @Override
                         protected void initChannel(SocketChannel ch) {
                             ch.pipeline()
-                                    .addLast(new MudisServerCodec())
-                                    .addLast(new MudisServerHandler());
+                                    .addLast(new ServerCodec())
+                                    .addLast(new ServerHandler());
                         }
                     })
                     .bind(host, port)
                     .sync()
                     .channel();
 
-            LOGGER.info("Mudis server started successfully on {}:{}", host, port);
+            Log.info("Mudis server started successfully on {}:{}", host, port);
             serverChannel.closeFuture().sync();
 
         } catch (InterruptedException e) {
-            LOGGER.error("Server startup interrupted", e);
+            Log.error("Server startup interrupted", e);
             Thread.currentThread().interrupt();
             throw new RuntimeException("Server startup interrupted", e);
         } catch (Exception e) {
-            LOGGER.error("Failed to start server", e);
+            Log.error("Failed to start server", e);
             throw new RuntimeException("Failed to start server", e);
         } finally {
             running.set(false);
-            LOGGER.info("Server stopped");
+            Log.info("Server stopped");
         }
     }
 
@@ -92,18 +92,18 @@ public class MudisServer implements Server {
     @Override
     public void stop() {
         if (!running.get()) {
-            LOGGER.debug("Server is not running");
+            Log.debug("Server is not running");
             return;
         }
 
-        LOGGER.info("Stopping Mudis server...");
+        Log.info("Stopping Mudis server...");
 
         if (serverChannel != null && serverChannel.isActive()) {
             try {
                 serverChannel.close().sync();
-                LOGGER.info("Server channel closed");
+                Log.info("Server channel closed");
             } catch (InterruptedException e) {
-                LOGGER.error("Error closing server channel", e);
+                Log.error("Error closing server channel", e);
                 Thread.currentThread().interrupt();
             }
         }
@@ -111,13 +111,13 @@ public class MudisServer implements Server {
         try {
             bossGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
             workerGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS).sync();
-            LOGGER.info("Event loop groups shut down");
+            Log.info("Event loop groups shut down");
         } catch (InterruptedException e) {
-            LOGGER.error("Error shutting down event loop groups", e);
+            Log.error("Error shutting down event loop groups", e);
             Thread.currentThread().interrupt();
         }
 
         running.set(false);
-        LOGGER.info("Mudis server stopped successfully");
+        Log.info("Mudis server stopped successfully");
     }
 }

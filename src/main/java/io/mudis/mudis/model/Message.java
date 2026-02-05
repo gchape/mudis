@@ -1,5 +1,7 @@
 package io.mudis.mudis.model;
 
+import java.util.Arrays;
+
 public sealed interface Message {
 
     static Message of(Operation op, String[] args) {
@@ -23,11 +25,12 @@ public sealed interface Message {
     }
 
     private static Message newPublishMessage(String[] args) {
-        if (args.length != 2) {
-            throw new IllegalStateException("PUBLISH requires 2 args, got " + args.length);
+        if (args.length < 2) {
+            throw new IllegalStateException("PUBLISH requires 2+ args, got " + args.length);
         }
 
-        return new Message.Publish(args[0], args[1]);
+        var message = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        return new Message.Publish(args[0], message);
     }
 
     private static Message newUnsubscribeMessage(String[] args) {

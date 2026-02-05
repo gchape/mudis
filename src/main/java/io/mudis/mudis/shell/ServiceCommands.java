@@ -2,7 +2,7 @@ package io.mudis.mudis.shell;
 
 import io.mudis.mudis.client.Client;
 import io.mudis.mudis.pubsub.PublishRegistrar;
-import io.mudis.mudis.server.MudisServer;
+import io.mudis.mudis.server.ServerImpl;
 import io.mudis.mudis.server.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +24,7 @@ public class ServiceCommands {
     private int port;
 
     @Autowired
-    public ServiceCommands(MudisServer mudisServer, Client client) {
+    public ServiceCommands(ServerImpl mudisServer, Client client) {
         this.client = client;
         this.server = mudisServer;
     }
@@ -93,7 +93,10 @@ public class ServiceCommands {
 
     @Command(name = "status", description = "Show the current status of the Mudis service.", group = "Service")
     public String getStatus() {
-        return "=== Mudis Status ===\n" + "Server: " + (server.isRunning() ? "RUNNING" : "STOPPED") + "\n" + "Client: " + (client.isConnected() ? "CONNECTED" : "DISCONNECTED") + "\n" + "Channels: " + PublishRegistrar.INSTANCE.getChannels().size() + "\n";
+        return "=== Mudis Status ===\n" +
+                "Server: " + (server.isRunning() ? "RUNNING" : "STOPPED") + "\n" +
+                "Client: " + (client.isConnected() ? "CONNECTED" : "DISCONNECTED") + "\n" +
+                "Channels: " + PublishRegistrar.INSTANCE.getChannels().size() + "\n";
     }
 
     @Command(name = "channels", description = "List all active pub/sub channels.", group = "Service")
