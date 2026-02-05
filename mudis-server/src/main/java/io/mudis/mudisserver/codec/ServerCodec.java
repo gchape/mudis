@@ -72,7 +72,7 @@ public class ServerCodec extends ByteToMessageCodec<String> {
         RequestValidator.validateArgsSize(size, op);
 
         if (in.readableBytes() < size) {
-            return null; // Not enough data yet
+            return null;
         }
 
         if (size == 0) {

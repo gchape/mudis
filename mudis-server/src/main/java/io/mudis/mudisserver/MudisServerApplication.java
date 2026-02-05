@@ -8,7 +8,6 @@ public class MudisServerApplication {
     static void main() {
         var server = new ServerImpl();
         server.start();
-        // after server stops
         server.stop();
         PublisherRegistrar.INSTANCE.shutdown();
     }

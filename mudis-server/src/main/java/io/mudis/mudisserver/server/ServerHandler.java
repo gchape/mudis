@@ -30,6 +30,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
 
         try {
             switch (msg) {
+                case Message.Show show -> handleShow(ctx, show);
                 case Message.Subscribe sub -> handleSubscribe(ctx, sub);
                 case Message.Publish pub -> handlePublish(ctx, pub);
                 case Message.Unsubscribe unsub -> handleUnsubscribe(ctx, unsub);
@@ -38,6 +39,26 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
             Log.error("Error handling message: {}", msg, e);
             sendError(ctx, "Error processing message: " + e.getMessage());
         }
+    }
+
+    private void handleShow(ChannelHandlerContext ctx, Message.Show show) {
+        String channel = show.channel();
+
+        Publisher publisher = publisherRegistrar.get(channel);
+        if (publisher == null) {
+            ctx.writeAndFlush("WARN: No channel found: " + channel);
+            Log.warn("Show to non-existent channel: {}", channel);
+            return;
+        }
+
+        var subscriber = publisher.getSubscriber(ctx);
+        if (subscriber == null) {
+            ctx.writeAndFlush("WARN: You are not currently subscribed to this channel: " + channel);
+            Log.warn("Subscriber not found or closed for ctx: {}", ctx);
+            return;
+        }
+
+        ctx.writeAndFlush(subscriber.toString());
     }
 
     private void handleSubscribe(ChannelHandlerContext ctx, Message.Subscribe sub) {
@@ -57,7 +78,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
         Publisher publisher = publisherRegistrar.get(channel);
         if (publisher == null) {
             ctx.writeAndFlush("WARN: No subscribers for channel: " + channel);
-            Log.debug("Publish to channel with no subscribers: {}", channel);
+            Log.warn("Publish to channel with no subscribers: {}", channel);
             return;
         }
 

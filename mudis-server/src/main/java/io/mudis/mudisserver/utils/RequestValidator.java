@@ -7,9 +7,10 @@ import io.mudis.mudisserver.model.Operation;
  * Validates request parameters for operations.
  */
 public class RequestValidator {
-    private static final int MAX_SUBSCRIBE_ARGS_SIZE = 256;
+    private static final int MAX_SHOW_ARGS_SIZE = 256;
+    private static final int MAX_SUBSCRIBE_ARGS_SIZE = 516;
     private static final int MAX_UNSUBSCRIBE_ARGS_SIZE = 256;
-    private static final int MAX_PUBLISH_ARGS_SIZE = 1024 * 1024; // 1MB
+    private static final int MAX_PUBLISH_ARGS_SIZE = 1024 * 1024;
 
     private RequestValidator() {
     }
@@ -53,6 +54,7 @@ public class RequestValidator {
 
     private static int getMaxArgsSize(Operation op) {
         return switch (op) {
+            case SHOW -> MAX_SHOW_ARGS_SIZE;
             case SUBSCRIBE -> MAX_SUBSCRIBE_ARGS_SIZE;
             case UNSUBSCRIBE -> MAX_UNSUBSCRIBE_ARGS_SIZE;
             case PUBLISH -> MAX_PUBLISH_ARGS_SIZE;

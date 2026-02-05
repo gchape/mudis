@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -21,10 +22,10 @@ public class ClientCodec extends ByteToMessageCodec<String> {
 
     @Override
     protected void encode(ChannelHandlerContext ctx, String command, ByteBuf out) {
-        String[] parts = command.trim().split("\\s+", 2);
+        String[] parts = command.trim().split("\\s+");
 
         if (parts.length == 0 || parts[0].isEmpty()) {
-            throw new IllegalArgumentException("Empty command");
+            throw new IllegalArgumentException("Empty operation");
         }
 
         Operation op = parseOperation(parts[0]);
@@ -77,9 +78,13 @@ public class ClientCodec extends ByteToMessageCodec<String> {
     }
 
     private byte[] getArgumentsBytes(String[] parts) {
-        if (parts.length < 2 || parts[1].isEmpty()) {
+        if (parts.length < 2) {
             return new byte[0];
         }
-        return parts[1].getBytes(StandardCharsets.UTF_8);
+
+        return String.join(
+                " ",
+                Arrays.copyOfRange(parts, 1, parts.length)
+        ).getBytes();
     }
 }

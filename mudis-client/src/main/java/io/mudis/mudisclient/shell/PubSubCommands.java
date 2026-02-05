@@ -33,8 +33,8 @@ public class PubSubCommands {
     @Command(name = "PUBLISH",
             description = "Publish a message to a channel",
             group = "Pub/Sub")
-    public String publish(@Argument(index = 0, description = "Channel name") String channel,
-                          @Argument(index = 1, description = "Message to publish") String message) {
+    public String publish(@NotBlank @Argument(index = 0, description = "Channel name") String channel,
+                          @NotBlank @Argument(index = 1, description = "Message to publish") String message) {
         if (!client.isConnected()) {
             return "ERROR: Client is not connected. Run 'start' first.";
         }
@@ -46,7 +46,7 @@ public class PubSubCommands {
     }
 
     @Command(name = "SUBSCRIBE",
-            description = "Subscribe to a channel with optional data structure",
+            description = "Subscribe to a channel with data structure",
             group = "Pub/Sub")
     public String subscribe(
             @NotBlank @Argument(
@@ -76,7 +76,7 @@ public class PubSubCommands {
             description = "Unsubscribe from a channel",
             group = "Pub/Sub")
     public String unsubscribe(
-            @Argument(index = 0, description = "Channel name") String channel) {
+            @NotBlank @Argument(index = 0, description = "Channel name") String channel) {
         if (!client.isConnected()) {
             return "ERROR: Client is not connected. Run 'start' first.";
         }
@@ -93,10 +93,26 @@ public class PubSubCommands {
         };
     }
 
+    @Command(name = "SHOW",
+            description = "Show published data for a subscriber local channel",
+            group = "Pub/Sub")
+    public String show(@NotBlank @Argument(index = 0, description = "Channel name") String channel) {
+        if (!client.isConnected()) {
+            return "ERROR: Client is not connected. Run 'start' first.";
+        }
+
+        client.send("SHOW " + channel);
+        return awaitServerResponse("");
+    }
+
     private String awaitServerResponse(String prefix) {
-        var messages = new StringBuilder("\n");
+        var messages = new StringBuilder();
         var future = new CompletableFuture<Void>();
         var counter = new AtomicInteger(1);
+
+        if (!prefix.isBlank()) {
+            messages.append("\n");
+        }
 
         Flow.Subscriber<String> subscriber = new Flow.Subscriber<>() {
             private Flow.Subscription subscription;

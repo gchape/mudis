@@ -4,12 +4,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public sealed interface Message {
-    Pattern SUBSCRIBE_PATTERN = Pattern.compile("^([^ ]+)\\s*(.*)$");
+    // Matches a single channel name (e.g., SHOW <channel>)
+    Pattern SHOW_CHANNEL_PATTERN = Pattern.compile("^([^ ]+)$");
+    // Matches subscribe with channel and data structure (e.g., SUBSCRIBE <channel> <data_structure>)
+    Pattern SUBSCRIBE_PATTERN = Pattern.compile("^([^ ]+)\\s+(.*)$");
+    // Matches publish with channel and message (e.g., PUBLISH <channel> <message>)
     Pattern PUBLISH_PATTERN = Pattern.compile("^([^ ]+)\\s+(.*)$");
+    // Matches unsubscribe with a single channel (e.g., UNSUBSCRIBE <channel>)
     Pattern UNSUBSCRIBE_PATTERN = Pattern.compile("^([^ ]+)$");
 
     static Message of(Operation op, String args) {
         return switch (op) {
+            case SHOW -> newShowMessage(args);
             case SUBSCRIBE -> newSubscribeMessage(args);
             case PUBLISH -> newPublishMessage(args);
             case UNSUBSCRIBE -> newUnsubscribeMessage(args);
@@ -24,26 +30,33 @@ public sealed interface Message {
         return matcher;
     }
 
+    private static Message newShowMessage(String s) {
+        Matcher matcher = getMatcher(SHOW_CHANNEL_PATTERN, s);
+        String channel = matcher.group(1);
+        return new Show(channel);
+    }
+
     private static Message newSubscribeMessage(String s) {
         Matcher matcher = getMatcher(SUBSCRIBE_PATTERN, s);
         String channel = matcher.group(1);
         String ds = matcher.group(2);
-
-        return new Message.Subscribe(channel, DataStructure.from(ds));
+        return new Subscribe(channel, DataStructure.from(ds));
     }
 
     private static Message newPublishMessage(String s) {
         Matcher matcher = getMatcher(PUBLISH_PATTERN, s);
         String channel = matcher.group(1);
         String message = matcher.group(2);
-
-        return new Message.Publish(channel, message);
+        return new Publish(channel, message);
     }
 
     private static Message newUnsubscribeMessage(String s) {
         Matcher matcher = getMatcher(UNSUBSCRIBE_PATTERN, s);
         String channel = matcher.group(1);
-        return new Message.Unsubscribe(channel);
+        return new Unsubscribe(channel);
+    }
+
+    record Show(String channel) implements Message {
     }
 
     record Subscribe(String channel, DataStructure ds) implements Message {

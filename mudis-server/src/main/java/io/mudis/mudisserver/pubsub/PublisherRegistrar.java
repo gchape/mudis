@@ -23,11 +23,7 @@ public enum PublisherRegistrar {
     private final Map<String, Publisher> publishers = new ConcurrentHashMap<>();
 
     PublisherRegistrar() {
-        var threadFactory = Thread
-                .ofPlatform()
-                .daemon()
-                .factory();
-
+        var threadFactory = Thread.ofVirtual().factory();
         this.executor = Executors.newSingleThreadScheduledExecutor(threadFactory);
         this.executor.scheduleAtFixedRate(
                 this::cleanupUnusedChannels,
@@ -38,7 +34,6 @@ public enum PublisherRegistrar {
     }
 
     public Publisher getOrCreate(String channel) {
-        validateChannel(channel);
         return publishers.computeIfAbsent(channel, _ -> {
             Publisher publisher = new Publisher();
             Log.info("Created publisher for channel: {}", channel);
@@ -101,11 +96,5 @@ public enum PublisherRegistrar {
             executor.shutdown();
         }
         Log.info("Shutdown complete");
-    }
-
-    private void validateChannel(String channel) {
-        if (channel == null || channel.trim().isEmpty()) {
-            throw new IllegalArgumentException("Channel name cannot be null or empty");
-        }
     }
 }

@@ -22,9 +22,9 @@ public class ClientCommands {
         if (!client.isConnected()) {
             try {
                 client.connect();
-                result.append("✓ Client connected");
+                result.append("Client connected");
             } catch (Exception e) {
-                result.append("✗ Client connection failed: ").append(e.getMessage());
+                result.append("Client connection failed: ").append(e.getMessage());
                 return result.toString();
             }
         } else {

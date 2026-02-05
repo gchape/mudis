@@ -1,6 +1,7 @@
 package io.mudis.mudisclient.model;
 
 public enum Operation {
+    SHOW,
     PUBLISH,
     SUBSCRIBE,
     UNSUBSCRIBE;

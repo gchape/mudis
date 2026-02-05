@@ -52,10 +52,14 @@ public class Publisher extends SubmissionPublisher<String> {
         return subscribers.contains(ctx);
     }
 
+    public DataStructureSubscriber getSubscriber(ChannelHandlerContext ctx) {
+        return subscriberMap.get(ctx);
+    }
+
     /**
      * Subscriber implementation that handles different data structure types.
      */
-    private class DataStructureSubscriber implements Flow.Subscriber<String> {
+    public class DataStructureSubscriber implements Flow.Subscriber<String> {
         private final ChannelHandlerContext ctx;
         private final DataStructure dataStructure;
         private final Collection<String> collection;
@@ -104,6 +108,11 @@ public class Publisher extends SubmissionPublisher<String> {
             subscribers.remove(ctx);
             subscriberMap.remove(ctx);
             Log.info("Subscription completed");
+        }
+
+        @Override
+        public String toString() {
+            return this.collection.toString();
         }
     }
 }
