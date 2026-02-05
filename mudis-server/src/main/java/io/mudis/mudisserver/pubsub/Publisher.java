@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
 
@@ -61,16 +62,15 @@ public class Publisher extends SubmissionPublisher<String> {
         private Flow.Subscription subscription;
 
         DataStructureSubscriber(DataStructure dataStructure, ChannelHandlerContext ctx) {
-            this.dataStructure = dataStructure;
             this.ctx = ctx;
+            this.dataStructure = dataStructure;
             this.collection = createCollection(dataStructure);
         }
 
         private Collection<String> createCollection(DataStructure ds) {
             return switch (ds) {
-                case LIST -> Collections.synchronizedList(new ArrayList<>());
-                case HASH -> ConcurrentHashMap.newKeySet();
-                case NONE -> null;
+                case QUEUE -> new ConcurrentLinkedQueue<>();
+                case SET -> Collections.synchronizedSet(new LinkedHashSet<>());
             };
         }
 
@@ -84,9 +84,7 @@ public class Publisher extends SubmissionPublisher<String> {
         @Override
         public void onNext(String message) {
             try {
-                if (collection != null) {
-                    collection.add(message);
-                }
+                collection.add(message);
                 subscription.request(1);
             } catch (Exception e) {
                 Log.error("Error processing message: {}", message, e);

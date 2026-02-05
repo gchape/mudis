@@ -29,7 +29,7 @@ public sealed interface Message {
         String channel = matcher.group(1);
         String ds = matcher.group(2);
 
-        return new Message.Subscribe(channel, ds.isEmpty() ? DataStructure.NONE : DataStructure.from(ds));
+        return new Message.Subscribe(channel, DataStructure.from(ds));
     }
 
     private static Message newPublishMessage(String s) {

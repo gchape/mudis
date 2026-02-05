@@ -2,6 +2,7 @@ package io.mudis.mudisclient.shell;
 
 import io.mudis.mudisclient.client.Client;
 import io.mudis.mudisclient.queue.MessageQueue;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.shell.core.command.annotation.Argument;
 import org.springframework.shell.core.command.annotation.Command;
@@ -20,9 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @SuppressWarnings("unused")
 public class PubSubCommands {
     private static final int DEFAULT_RESPONSE_TIMEOUT_SECONDS = 5;
-
-    private final Client client;
     private final MessageQueue messageQueue;
+    private final Client client;
 
     @Autowired
     public PubSubCommands(Client client, MessageQueue messageQueue) {
@@ -42,27 +42,34 @@ public class PubSubCommands {
         String cleanMessage = message.replace("\"", "");
         client.send("PUBLISH " + channel + " " + cleanMessage);
 
-        return awaitServerResponse(1, "Message sent");
+        return awaitServerResponse("Message sent");
     }
 
     @Command(name = "SUBSCRIBE",
             description = "Subscribe to a channel with optional data structure",
             group = "Pub/Sub")
-    public String subscribe(@Argument(index = 0, description = "Channel name") String channel,
-                            @Argument(index = 1, description = "Data structure: [] (list), #{} (set), or empty") String ds) {
+    public String subscribe(
+            @NotBlank @Argument(
+                    index = 0,
+                    description = "Channel name") String channel,
+            @NotBlank @Argument(
+                    index = 1,
+                    description = "Data structure: [] (queue), #{} (set)",
+                    defaultValue = "[]") String ds
+    ) {
         if (!client.isConnected()) {
             return "ERROR: Client is not connected. Run 'start' first.";
         }
 
-        String dataStructure = validateDataStructure(ds);
-        if (dataStructure == null && !ds.isBlank()) {
-            return "ERROR: Invalid data structure. Use [] for list, #{} for set, or leave empty.";
+        ds = validateDataStructure(ds);
+        if (ds == null) {
+            return "ERROR: Invalid data structure. Use [] for queue, #{} for set.";
         }
 
-        String command = "SUBSCRIBE " + channel + (dataStructure != null ? " " + dataStructure : "");
+        String command = "SUBSCRIBE " + channel + " " + ds;
         client.send(command);
 
-        return awaitServerResponse(1, "Subscription request sent");
+        return awaitServerResponse("Subscription request sent");
     }
 
     @Command(name = "UNSUBSCRIBE",
@@ -75,14 +82,10 @@ public class PubSubCommands {
         }
 
         client.send("UNSUBSCRIBE " + channel);
-        return awaitServerResponse(1, "Unsubscribe request sent");
+        return awaitServerResponse("Unsubscribe request sent");
     }
 
     private String validateDataStructure(String ds) {
-        if (ds == null || ds.isBlank()) {
-            return null;
-        }
-
         return switch (ds.trim()) {
             case "[]" -> "[]";
             case "#{}" -> "#{}";
@@ -90,10 +93,10 @@ public class PubSubCommands {
         };
     }
 
-    private String awaitServerResponse(int expectedMessages, String prefix) {
-        StringBuilder messages = new StringBuilder("\n");
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        AtomicInteger counter = new AtomicInteger(1);
+    private String awaitServerResponse(String prefix) {
+        var messages = new StringBuilder("\n");
+        var future = new CompletableFuture<Void>();
+        var counter = new AtomicInteger(1);
 
         Flow.Subscriber<String> subscriber = new Flow.Subscriber<>() {
             private Flow.Subscription subscription;
@@ -101,18 +104,18 @@ public class PubSubCommands {
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
                 this.subscription = subscription;
-                subscription.request(expectedMessages);
+                subscription.request(1);
             }
 
             @Override
             public void onNext(String item) {
-                if (counter.get() == expectedMessages) {
+                if (counter.get() == 1) {
                     messages.append(item);
                 } else {
                     messages.append(item).append("\n");
                 }
 
-                if (counter.incrementAndGet() > expectedMessages) {
+                if (counter.incrementAndGet() > 1) {
                     subscription.cancel();
                     future.complete(null);
                 }
