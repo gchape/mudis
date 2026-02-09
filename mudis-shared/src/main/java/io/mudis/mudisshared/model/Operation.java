@@ -1,4 +1,4 @@
-package io.mudis.mudisclient.model;
+package io.mudis.mudisshared.model;
 
 public enum Operation {
     SHOW,

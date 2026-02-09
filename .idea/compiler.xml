@@ -8,6 +8,7 @@
         <outputRelativeToContentRoot value="true" />
         <module name="mudis-server" />
         <module name="mudis-client" />
+        <module name="mudis-shared" />
       </profile>
     </annotationProcessing>
   </component>

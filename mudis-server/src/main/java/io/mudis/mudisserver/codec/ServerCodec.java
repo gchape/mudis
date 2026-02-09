@@ -1,7 +1,7 @@
 package io.mudis.mudisserver.codec;
 
 import io.mudis.mudisserver.model.Message;
-import io.mudis.mudisserver.model.Operation;
+import io.mudis.mudisshared.model.Operation;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;

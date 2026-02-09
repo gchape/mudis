@@ -1,5 +1,7 @@
 package io.mudis.mudisserver.model;
 
+import io.mudis.mudisshared.model.Operation;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 

@@ -13,6 +13,7 @@
     </parent>
 
     <name>mudis-client</name>
+    <packaging>jar</packaging>
     <artifactId>mudis-client</artifactId>
     <description>mudis-client</description>
 
@@ -32,8 +33,8 @@
         </dependency>
 
         <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-all</artifactId>
+            <groupId>io.mudis</groupId>
+            <artifactId>mudis-shared</artifactId>
         </dependency>
     </dependencies>
 

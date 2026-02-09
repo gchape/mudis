@@ -13,15 +13,11 @@
     </parent>
 
     <name>mudis-server</name>
+    <packaging>jar</packaging>
     <artifactId>mudis-server</artifactId>
     <description>mudis-server</description>
 
     <dependencies>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-all</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -31,6 +27,11 @@
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>1.5.25</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.mudis</groupId>
+            <artifactId>mudis-shared</artifactId>
         </dependency>
     </dependencies>
 

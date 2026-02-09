@@ -17,7 +17,9 @@
         <java.version>25</java.version>
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
+
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
         <netty.version>4.2.9.Final</netty.version>
         <spring-boot.version>4.0.2</spring-boot.version>
         <spring-shell.version>4.0.1</spring-shell.version>
@@ -26,7 +28,16 @@
     <modules>
         <module>mudis-client</module>
         <module>mudis-server</module>
+        <module>mudis-shared</module>
     </modules>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>${netty.version}</version>
+        </dependency>
+    </dependencies>
 
     <dependencyManagement>
         <dependencies>
@@ -47,9 +58,9 @@
             </dependency>
 
             <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-all</artifactId>
-                <version>${netty.version}</version>
+                <groupId>io.mudis</groupId>
+                <artifactId>mudis-shared</artifactId>
+                <version>${version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
