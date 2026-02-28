@@ -2,6 +2,8 @@
 
 High-performance pub/sub messaging system built on Netty with reactive streams. Multi-module project with standalone server and Spring Boot client.
 
+![mudis](https://github.com/user-attachments/assets/07917531-512b-4dac-b74c-d5b88575bb60)
+
 ## Architecture
 
 ### Module Structure
